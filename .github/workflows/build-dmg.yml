@@ -13,17 +13,21 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    # macos-14/15 are Apple Silicon runners, which aren't enabled on every
+    # plan ("configuration ... is not supported"). macos-13 is the widely
+    # available Intel runner; --universal below still produces a binary
+    # that runs natively on both Apple Silicon and Intel Macs.
+    runs-on: macos-13
     defaults:
       run:
         working-directory: StorageOptimizerNative
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build and package
+      - name: Build and package (universal binary)
         run: |
           chmod +x build.sh package-dmg.sh
-          ./build.sh
+          ./build.sh --universal
           ./package-dmg.sh
 
       - name: Upload dmg artifact

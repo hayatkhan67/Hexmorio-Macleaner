@@ -9,10 +9,20 @@ APP_NAME="Hexmorio Macleaner"
 BUNDLE_ID="com.hexmorio.macleaner"
 APP_DIR="dist/${APP_NAME}.app"
 
-echo "==> Building release binary..."
-swift build -c release
+# Pass --universal to build a fat (arm64 + x86_64) binary that runs natively
+# on both Apple Silicon and Intel Macs, regardless of which Mac built it.
+# Local dev builds default to the host's single architecture (faster).
+# (Plain string, not a bash array: macOS ships bash 3.2, where `"${arr[@]}"`
+# on an empty array trips `set -u`'s unbound-variable check.)
+ARCH_FLAGS=""
+if [ "${1:-}" = "--universal" ]; then
+    ARCH_FLAGS="--arch arm64 --arch x86_64"
+fi
 
-BIN_PATH=$(swift build -c release --show-bin-path)/StorageOptimizer
+echo "==> Building release binary..."
+swift build -c release $ARCH_FLAGS
+
+BIN_PATH=$(swift build -c release $ARCH_FLAGS --show-bin-path)/StorageOptimizer
 
 echo "==> Assembling ${APP_DIR}..."
 rm -rf "dist"
