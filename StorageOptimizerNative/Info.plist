@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Macleaner</string>
+    <key>CFBundleDisplayName</key>
+    <string>Hexmorio Macleaner</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.hexmorio.macleaner</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>StorageOptimizer</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright (c) 2026 Hexmorio. Licensed under the MIT License.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Hexmorio Macleaner scans your Desktop for large files, duplicates, and installers to help you reclaim disk space.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Hexmorio Macleaner scans your Downloads for large files, duplicates, and installers to help you reclaim disk space.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Hexmorio Macleaner scans your Documents for large files to help you reclaim disk space.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Hexmorio Macleaner uses this to run administrator-authorized cleanup commands you explicitly approve.</string>
+</dict>
+</plist>

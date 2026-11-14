@@ -1,0 +1,1932 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hexmorio Macleaner | Advanced macOS Suite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 500: '#10b981', 600: '#059669', 700: '#047857' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background: radial-gradient(circle at 15% 15%, #18182f 0%, #0c0f17 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    }
+    .glass-card {
+      background: rgba(26, 34, 52, 0.65);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+    .ring-glow {
+      filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.4));
+    }
+    .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col antialiased select-none custom-scroll">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/75 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-indigo-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 ring-1 ring-white/20">
+        <i class="fa-solid fa-gauge-high text-slate-950 font-black text-lg"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+            Hexmorio Macleaner
+          </h1>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Ultra</span>
+        </div>
+        <p class="text-xs text-slate-400 flex items-center gap-2">
+          <span>macOS Deep Storage & Memory Engine</span>
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span class="text-emerald-400 font-mono text-[11px]" id="appStatus">Ready</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-3">
+      <button onclick="toggleAutoClean()" id="autoCleanBtn" class="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Toggle weekly background cleanup">
+        <i class="fa-solid fa-clock-rotate-left text-slate-400" id="autoCleanIcon"></i>
+        <span>Auto-Clean: <b id="autoCleanStatusText" class="text-slate-400">Off</b></span>
+      </button>
+
+      <button onclick="systemFlush()" id="flushBtn" title="Flush QuickLook & DNS system caches" class="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition active:scale-95">
+        <i class="fa-solid fa-spray-can-sparkles"></i>
+        <span>Flush System</span>
+      </button>
+
+      <button onclick="rescanAll()" id="refreshBtn" class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60 transition active:scale-95">
+        <i class="fa-solid fa-rotate text-slate-400" id="refreshIcon"></i>
+        <span>Rescan</span>
+      </button>
+
+      <button onclick="optimizeAllSafe()" id="optimizeSafeBtn" class="flex items-center gap-2 px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 transition active:scale-95 disabled:opacity-50">
+        <i class="fa-solid fa-bolt"></i>
+        <span>1-Click Optimize (<span id="btnSafeSize">0 B</span>)</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+    <!-- Top 4-Metric Grid (Disk, RAM, Projects, Caches) -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+      
+      <!-- 1. Primary Disk Gauge -->
+      <div class="glass-card rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden">
+        <div class="relative w-24 h-24 flex-shrink-0 flex items-center justify-center">
+          <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" stroke="#334155" stroke-width="10" fill="transparent" />
+            <circle id="diskProgressCircle" cx="50" cy="50" r="40" stroke="#10b981" stroke-width="10" stroke-linecap="round" fill="transparent"
+              stroke-dasharray="251.2" stroke-dashoffset="50" class="transition-all duration-1000 ease-out ring-glow" />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-lg font-black" id="percentUsedText">--%</span>
+            <span class="text-[9px] uppercase font-semibold text-slate-400">Used</span>
+          </div>
+        </div>
+        <div class="space-y-1 min-w-0">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Disk Storage</div>
+          <div class="text-xl font-black text-white" id="diskFreeText">-- GB</div>
+          <div class="text-[11px] text-emerald-400">Free Space</div>
+          <div class="text-[10px] text-slate-400">Total: <span id="diskTotalText" class="text-slate-300 font-mono">--</span></div>
+        </div>
+      </div>
+
+      <!-- 2. Live System Memory (RAM) Gauge -->
+      <div class="glass-card rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden">
+        <div class="relative w-24 h-24 flex-shrink-0 flex items-center justify-center">
+          <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" stroke="#334155" stroke-width="10" fill="transparent" />
+            <circle id="ramProgressCircle" cx="50" cy="50" r="40" stroke="#6366f1" stroke-width="10" stroke-linecap="round" fill="transparent"
+              stroke-dasharray="251.2" stroke-dashoffset="80" class="transition-all duration-1000 ease-out" />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-lg font-black text-indigo-300" id="ramPercentText">--%</span>
+            <span class="text-[9px] uppercase font-semibold text-slate-400">RAM</span>
+          </div>
+        </div>
+        <div class="space-y-1 min-w-0">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Memory (RAM)</div>
+          <div class="text-xl font-black text-white" id="ramFreeText">-- GB</div>
+          <div class="text-[11px] text-indigo-400">Free + Inactive</div>
+          <div class="text-[10px] text-slate-400">Total: <span id="ramTotalText" class="text-slate-300 font-mono">--</span></div>
+        </div>
+      </div>
+
+      <!-- 3. Cleanable Dev Caches -->
+      <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Cleanable Caches</span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">Safe</span>
+          </div>
+          <div class="text-2xl font-black text-white tracking-tight" id="statSafeText">-- GB</div>
+          <p class="text-[11px] text-slate-400 mt-0.5">Xcode, Simulator & Dart index.</p>
+        </div>
+        <div class="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between">
+          <span>Rebuildable:</span>
+          <span class="font-mono text-amber-300 font-bold" id="statRebuildText">0 B</span>
+        </div>
+      </div>
+
+      <!-- 4. Project Build Folders -->
+      <div class="glass-card rounded-2xl p-5 flex flex-col justify-between bg-gradient-to-br from-slate-900/40 to-indigo-950/20">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Project Builds</span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-500/10 text-indigo-300 font-medium" id="projectBuildCount">0 detected</span>
+          </div>
+          <div class="text-2xl font-black text-white tracking-tight" id="projectBuildsTotalSize">-- MB</div>
+          <p class="text-[11px] text-slate-400 mt-0.5">Flutter & Dart build artifacts.</p>
+        </div>
+        <div class="pt-2 border-t border-slate-800">
+          <button onclick="cleanAllProjectBuilds()" id="cleanAllBuildsBtn" class="w-full py-1 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] transition active:scale-95 disabled:opacity-40">
+            Clean Project Builds
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex items-center justify-between border-b border-slate-800 pb-2 overflow-x-auto">
+      <div class="flex gap-2 min-w-max">
+        <button onclick="switchTab('optimizer')" id="tabBtnOptimizer" class="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-2 transition">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <span>Dev & System Caches</span>
+          <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-slate-300" id="cacheItemsCount">0</span>
+        </button>
+
+        <button onclick="switchTab('library')" id="tabBtnLibrary" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-folder-tree"></i>
+          <span>Library & Other Folders</span>
+          <span class="px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 font-mono text-[10px] border border-indigo-500/30" id="tabLibraryTotalSize">75.8 GB</span>
+        </button>
+
+        <button onclick="switchTab('apps')" id="tabBtnApps" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-brands fa-apple"></i>
+          <span>All Applications</span>
+          <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-slate-300" id="tabAppsCount">0</span>
+        </button>
+
+        <button onclick="switchTab('packages')" id="tabBtnPackages" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-terminal"></i>
+          <span>Brew, Pip & CLI Tools</span>
+          <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-slate-300" id="tabPackagesCount">0</span>
+        </button>
+
+        <button onclick="switchTab('startup')" id="tabBtnStartup" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-power-off"></i>
+          <span>Startup & Launch Control</span>
+          <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-slate-300" id="tabStartupCount">0</span>
+        </button>
+
+        <button onclick="switchTab('diskmap')" id="tabBtnDiskMap" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>Visual Disk Map</span>
+        </button>
+
+        <button onclick="switchTab('projects')" id="tabBtnProjects" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-folder-tree"></i>
+          <span>Project Builds</span>
+          <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-slate-300" id="tabProjectsCount">0</span>
+        </button>
+
+        <button onclick="switchTab('leftovers')" id="tabBtnLeftovers" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-trash-can-arrow-up"></i>
+          <span>App Leftovers</span>
+          <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-slate-300" id="tabLeftoversCount">0</span>
+        </button>
+
+        <button onclick="switchTab('git')" id="tabBtnGit" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-brands fa-git-alt"></i>
+          <span>Git Repos</span>
+        </button>
+
+        <button onclick="switchTab('duplicates')" id="tabBtnDuplicates" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-clone"></i>
+          <span>Duplicates</span>
+        </button>
+
+        <button onclick="switchTab('installers')" id="tabBtnInstallers" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-box-archive"></i>
+          <span>Installers</span>
+        </button>
+
+        <button onclick="switchTab('largefiles')" id="tabBtnLargeFiles" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition">
+          <i class="fa-solid fa-file-zipper"></i>
+          <span>Large Files</span>
+        </button>
+      </div>
+
+      <div id="filterPills" class="flex items-center gap-2 min-w-max">
+        <button onclick="filterCategory('all')" class="filter-pill active px-3 py-1 text-[11px] font-medium rounded-full bg-slate-800 text-slate-200 border border-slate-700">All</button>
+        <button onclick="filterCategory('developer')" class="filter-pill px-3 py-1 text-[11px] font-medium rounded-full bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800">Developer</button>
+        <button onclick="filterCategory('system')" class="filter-pill px-3 py-1 text-[11px] font-medium rounded-full bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800">System & Apps</button>
+      </div>
+    </div>
+
+    <!-- TAB 1: Optimizer & Caches -->
+    <div id="tabContentOptimizer" class="space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 px-4 py-2 rounded-xl border border-slate-800/80 text-xs">
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" class="w-4 h-4 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900">
+          <label for="selectAllCheckbox" class="text-slate-300 cursor-pointer">Select All Cleanable Targets</label>
+          <span class="text-slate-500">•</span>
+          <span class="text-slate-400" id="selectedCountText">0 selected</span>
+        </div>
+        <button onclick="cleanSelected()" id="cleanSelectedBtn" disabled class="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">
+          Clean Selected
+        </button>
+      </div>
+      <div id="targetCardsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="col-span-2 py-12 text-center text-slate-500">
+          <i class="fa-solid fa-circle-notch fa-spin text-2xl mb-3 text-emerald-400"></i>
+          <p>Scanning targets...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Library & Other Deep Folders -->
+    <div id="tabContentLibrary" class="hidden space-y-6">
+      
+      <!-- Top 4 Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- 1. User Library -->
+        <div class="glass-card rounded-2xl p-4 border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-slate-900/60">
+          <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span class="font-bold uppercase tracking-wider text-[11px]">User Library</span>
+            <i class="fa-solid fa-folder text-amber-400"></i>
+          </div>
+          <div class="text-2xl font-black text-white" id="libCardUserSize">29.4 GB</div>
+          <p class="text-[11px] text-slate-400 mt-0.5"><span id="libCardUserCount">21</span> heavy directories in <code class="text-amber-300 font-mono text-[10px]">~/Library</code></p>
+        </div>
+
+        <!-- 2. Application Support -->
+        <div class="glass-card rounded-2xl p-4 border border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-slate-900/60">
+          <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span class="font-bold uppercase tracking-wider text-[11px]">App Support</span>
+            <i class="fa-solid fa-shapes text-indigo-400"></i>
+          </div>
+          <div class="text-2xl font-black text-white" id="libCardAppSupSize">5.9 GB</div>
+          <p class="text-[11px] text-slate-400 mt-0.5"><span id="libCardAppSupCount">21</span> app data stores in <code class="text-indigo-300 font-mono text-[10px]">Application Support</code></p>
+        </div>
+
+        <!-- 3. User Caches -->
+        <div class="glass-card rounded-2xl p-4 border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-slate-900/60">
+          <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span class="font-bold uppercase tracking-wider text-[11px]">User Caches</span>
+            <i class="fa-solid fa-bolt-lightning text-emerald-400"></i>
+          </div>
+          <div class="text-2xl font-black text-white" id="libCardCachesSize">2.4 GB</div>
+          <p class="text-[11px] text-slate-400 mt-0.5"><span id="libCardCachesCount">44</span> cache dirs in <code class="text-emerald-300 font-mono text-[10px]">~/Library/Caches</code></p>
+        </div>
+
+        <!-- 4. Hidden Dot Folders -->
+        <div class="glass-card rounded-2xl p-4 border border-purple-500/20 bg-gradient-to-br from-purple-500/5 to-slate-900/60">
+          <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span class="font-bold uppercase tracking-wider text-[11px]">Hidden Folders</span>
+            <i class="fa-solid fa-eye-slash text-purple-400"></i>
+          </div>
+          <div class="text-2xl font-black text-white" id="libCardDotsSize">45.8 GB</div>
+          <p class="text-[11px] text-slate-400 mt-0.5"><span id="libCardDotsCount">21</span> developer dot-folders in <code class="text-purple-300 font-mono text-[10px]">~/.*</code></p>
+        </div>
+      </div>
+
+      <!-- Controls: Category filter pills, search input, refresh -->
+      <div class="flex flex-col md:flex-row items-center justify-between gap-3 bg-slate-900/50 p-3 rounded-2xl border border-slate-800">
+        <div class="flex flex-wrap items-center gap-1.5" id="libraryFilterPills">
+          <button onclick="setLibraryFilter('all')" class="lib-filter-pill active px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">All Folders (<span id="libFilterAllCount">0</span>)</button>
+          <button onclick="setLibraryFilter('user_library')" class="lib-filter-pill px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60">~/Library Overview</button>
+          <button onclick="setLibraryFilter('app_support')" class="lib-filter-pill px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60">Application Support</button>
+          <button onclick="setLibraryFilter('user_caches')" class="lib-filter-pill px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60">User Caches</button>
+          <button onclick="setLibraryFilter('hidden_folders')" class="lib-filter-pill px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60">Hidden Dot Folders (~/.*)</button>
+          <button onclick="setLibraryFilter('system_library')" class="lib-filter-pill px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60">System /Library</button>
+        </div>
+
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <div class="relative flex-1 md:w-64">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+            <input type="text" id="librarySearchInput" oninput="renderLibraryItems()" placeholder="Search folders (e.g. gradle, codex, claude)..." class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-700/80 text-slate-200 focus:outline-none focus:border-emerald-500">
+          </div>
+          <button onclick="scanLibrary(true)" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 flex-shrink-0" title="Rescan Library">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Items Grid -->
+      <div id="libraryItemsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="col-span-2 py-12 text-center text-slate-500">
+          <i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-400 mr-2"></i>
+          Loading Library & deep folder inventory...
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 2: Applications Manager (All Apps) -->
+    <div id="tabContentApps" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div>
+          Installed applications in <span class="text-slate-200 font-mono">/Applications</span> and <span class="text-slate-200 font-mono">~/Applications</span>. Total: <span class="text-emerald-400 font-bold" id="appsTotalSize">0 GB</span>.
+        </div>
+        <button onclick="scanApps()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+          <i class="fa-solid fa-arrows-rotate"></i> Rescan Apps
+        </button>
+      </div>
+
+      <div class="glass-card rounded-2xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Application</th>
+              <th class="py-3 px-4">Size</th>
+              <th class="py-3 px-4">Path</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="appsTbody" class="divide-y divide-slate-800/60 font-mono">
+            <tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">Loading applications...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 3: Brew, Pip & CLI Packages -->
+    <div id="tabContentPackages" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div>
+          Homebrew packages (<span class="text-amber-400 font-bold font-mono" id="brewTotalSize">0 MB</span>), Global NPM tools, and Python pip packages.
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="runBrewCleanup()" id="brewCleanupBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium">
+            <i class="fa-solid fa-broom mr-1"></i> Run Brew Cleanup
+          </button>
+          <button onclick="scanPackages()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Packages Subtabs / Accordions -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Homebrew Formulas -->
+        <div class="glass-card rounded-xl p-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+            <span class="font-bold text-xs text-amber-400"><i class="fa-solid fa-beer-mug-empty mr-1"></i> Homebrew Formulas (<span id="brewCount">0</span>)</span>
+            <span class="text-xs font-mono font-bold text-slate-300" id="brewSizeSub">0 MB</span>
+          </div>
+          <div id="brewList" class="space-y-2 max-h-[480px] overflow-y-auto custom-scroll pr-1 font-mono text-xs"></div>
+        </div>
+
+        <!-- Global NPM & Pip -->
+        <div class="space-y-4">
+          <div class="glass-card rounded-xl p-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+              <span class="font-bold text-xs text-rose-400"><i class="fa-brands fa-npm mr-1"></i> Global NPM Packages (<span id="npmCount">0</span>)</span>
+            </div>
+            <div id="npmList" class="space-y-2 max-h-[220px] overflow-y-auto custom-scroll pr-1 font-mono text-xs"></div>
+          </div>
+
+          <div class="glass-card rounded-xl p-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+              <span class="font-bold text-xs text-sky-400"><i class="fa-brands fa-python mr-1"></i> Python Pip Packages (<span id="pipCount">0</span>)</span>
+            </div>
+            <div id="pipList" class="space-y-2 max-h-[220px] overflow-y-auto custom-scroll pr-1 font-mono text-xs"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: Startup & Launch App Control -->
+    <div id="tabContentStartup" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div>
+          Background LaunchAgents and LaunchDaemons that start on boot or user login. Toggle off unnecessary startup helpers to speed up Mac boot.
+        </div>
+        <button onclick="scanStartup()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+          <i class="fa-solid fa-arrows-rotate"></i> Rescan Startup
+        </button>
+      </div>
+
+      <div class="glass-card rounded-2xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Service Label</th>
+              <th class="py-3 px-4">Type</th>
+              <th class="py-3 px-4">Executable / Target</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="startupTbody" class="divide-y divide-slate-800/60 font-mono">
+            <tr><td colspan="5" class="py-8 text-center text-slate-500 font-sans">Loading startup items...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 5: Visual Disk Map (DaisyDisk style) -->
+    <div id="tabContentDiskMap" class="hidden space-y-4">
+      <!-- Quick Jump Shortcuts & Hidden Toggle -->
+      <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-900/50 p-3 rounded-2xl border border-slate-800 text-xs">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-slate-500 font-semibold uppercase text-[10px] tracking-wider mr-1">Quick Jump:</span>
+          <button onclick="loadDiskMap('')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition"><i class="fa-solid fa-house mr-1 text-emerald-400"></i>Home</button>
+          <button onclick="loadDiskMap('~/Library')" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-medium transition"><i class="fa-solid fa-folder mr-1"></i>~/Library</button>
+          <button onclick="loadDiskMap('~/Library/Application Support')" class="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 font-medium transition">App Support</button>
+          <button onclick="loadDiskMap('~/Library/Caches')" class="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium transition">User Caches</button>
+          <button onclick="loadDiskMap('/Library')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition">/Library (Sys)</button>
+          <button onclick="loadDiskMap('~/.gradle')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 font-medium transition">.gradle</button>
+          <button onclick="loadDiskMap('~/.android')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 font-medium transition">.android</button>
+          <button onclick="loadDiskMap('~/.codex')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 font-medium transition">.codex</button>
+          <button onclick="loadDiskMap('~/.pub-cache')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 font-medium transition">.pub-cache</button>
+          <button onclick="loadDiskMap('~/Downloads')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition">Downloads</button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="toggleDiskMapHidden()" id="diskMapHiddenToggle" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-eye" id="diskMapHiddenIcon"></i>
+            <span id="diskMapHiddenText">Hidden: On</span>
+          </button>
+          <button onclick="reloadCurrentDiskMap()" class="px-3 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+            <i class="fa-solid fa-rotate"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-4 flex items-center justify-between">
+        <div class="flex items-center gap-2 overflow-x-auto text-xs font-mono" id="diskMapBreadcrumbs">
+          <button onclick="loadDiskMap('')" class="text-emerald-400 hover:underline flex items-center gap-1 font-bold">
+            <i class="fa-solid fa-house"></i> Home
+          </button>
+        </div>
+        <span class="text-xs text-slate-400 font-mono" id="diskMapItemCount">0 items</span>
+      </div>
+
+      <div class="glass-card rounded-2xl p-6">
+        <div class="mb-4 flex items-center justify-between text-xs text-slate-400">
+          <span>Click any folder to drill down into its contents. Large folders display a relative size bar.</span>
+        </div>
+        <div id="diskMapContainer" class="space-y-3"></div>
+      </div>
+    </div>
+
+    <!-- TAB 6: Project Build Folders -->
+    <div id="tabContentProjects" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div class="text-slate-400">
+          Scanned <span class="text-slate-200 font-mono">~/projects</span> for Flutter <code class="text-indigo-400">build/</code>, <code class="text-indigo-400">.dart_tool/</code>, and CocoaPods <code class="text-indigo-400">Pods/</code>.
+        </div>
+        <button onclick="scanProjects()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-2 border border-slate-700">
+          <i class="fa-solid fa-arrows-rotate"></i> Rescan Projects
+        </button>
+      </div>
+      <div class="glass-card rounded-2xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Project</th>
+              <th class="py-3 px-4">Artifact</th>
+              <th class="py-3 px-4">Size</th>
+              <th class="py-3 px-4">Path</th>
+              <th class="py-3 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="projectsTbody" class="divide-y divide-slate-800/60 font-mono">
+            <tr><td colspan="5" class="py-8 text-center text-slate-500 font-sans">Loading projects...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 7: App Leftovers (AppCleaner Engine) -->
+    <div id="tabContentLeftovers" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div>
+          Folders in <span class="text-slate-200 font-mono">~/Library/Application Support</span> belonging to deleted/uninstalled apps.
+        </div>
+        <button onclick="scanLeftovers()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+          <i class="fa-solid fa-arrows-rotate"></i> Rescan Leftovers
+        </button>
+      </div>
+      <div class="glass-card rounded-2xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Application Folder</th>
+              <th class="py-3 px-4">Size</th>
+              <th class="py-3 px-4">Path</th>
+              <th class="py-3 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="leftoversTbody" class="divide-y divide-slate-800/60 font-mono">
+            <tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">Loading leftovers...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 8: Git Repos Compressor -->
+    <div id="tabContentGit" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div>
+          Git repositories in <span class="text-slate-200 font-mono">~/projects</span> with large commit packs and unpruned objects.
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="optimizeAllGitRepos()" id="optimizeAllGitBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
+            <i class="fa-brands fa-git-alt mr-1"></i> Compress All Repos
+          </button>
+          <button onclick="scanGitRepos()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+        </div>
+      </div>
+      <div class="glass-card rounded-2xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Repository</th>
+              <th class="py-3 px-4">Git Size</th>
+              <th class="py-3 px-4">Path</th>
+              <th class="py-3 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="gitTbody" class="divide-y divide-slate-800/60 font-mono">
+            <tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">Loading git repositories...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 9: Duplicate Files -->
+    <div id="tabContentDuplicates" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div>
+          Found duplicate files wasting <span class="text-amber-400 font-bold font-mono" id="dupeWastedText">0 B</span> in Downloads and Desktop.
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="autoSelectDuplicates()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
+            Select Older Copies
+          </button>
+          <button onclick="cleanSelectedDuplicates()" id="deleteDupesBtn" disabled class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium disabled:opacity-40">
+            Delete Selected (<span id="selectedDupesCount">0</span>)
+          </button>
+          <button onclick="scanDuplicates()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+        </div>
+      </div>
+      <div id="duplicatesList" class="space-y-4"></div>
+    </div>
+
+    <!-- TAB 10: Installers & DMGs -->
+    <div id="tabContentInstallers" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div>
+          Found <span class="text-emerald-400 font-bold" id="installersTotalCount">0</span> installer archives (<span class="text-white font-bold font-mono" id="installersTotalSize">0 B</span>) in Downloads and Desktop.
+        </div>
+        <button onclick="scanInstallers()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+          <i class="fa-solid fa-arrows-rotate"></i> Rescan Installers
+        </button>
+      </div>
+      <div class="glass-card rounded-2xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Installer File</th>
+              <th class="py-3 px-4">Size</th>
+              <th class="py-3 px-4">Location</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="installersTbody" class="divide-y divide-slate-800/60 font-mono">
+            <tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">Loading installers...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 11: Large Files Finder -->
+    <div id="tabContentLargeFiles" class="hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800 text-xs">
+        <div class="text-slate-400">
+          Found <span class="text-emerald-400 font-bold" id="largeFilesCount">0</span> files in <span class="text-slate-200 font-mono">Downloads, Desktop, Documents, projects</span> larger than
+          <select id="minMbSelect" onchange="loadLargeFiles()" class="ml-1 bg-slate-800 text-emerald-400 border border-slate-700 rounded px-2 py-0.5 font-bold outline-none cursor-pointer">
+            <option value="25">25 MB</option>
+            <option value="50" selected>50 MB</option>
+            <option value="100">100 MB</option>
+            <option value="250">250 MB</option>
+            <option value="500">500 MB</option>
+          </select>
+        </div>
+        <button onclick="loadLargeFiles()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-2 border border-slate-700">
+          <i class="fa-solid fa-arrows-rotate"></i> Rescan Large Files
+        </button>
+      </div>
+      <div class="glass-card rounded-2xl overflow-hidden">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">File Name</th>
+              <th class="py-3 px-4">Size</th>
+              <th class="py-3 px-4">Location</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="largeFilesTbody" class="divide-y divide-slate-800/60 font-mono">
+            <tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="glass-card bg-slate-900/95 border border-emerald-500/40 rounded-xl px-4 py-3 shadow-2xl flex items-center gap-3">
+      <i class="fa-solid fa-circle-check text-emerald-400 text-lg" id="toastIcon"></i>
+      <span class="text-xs font-medium text-slate-200" id="toastMsg">Action completed</span>
+    </div>
+  </div>
+
+  <script>
+    let appData = {
+      disk: null,
+      ram: null,
+      targets: [],
+      library: null,
+      currentLibraryFilter: 'all',
+      diskMapShowHidden: true,
+      apps: [],
+      packages: null,
+      startup: [],
+      projects: [],
+      duplicates: [],
+      installers: [],
+      gitRepos: [],
+      leftovers: [],
+      largeFiles: [],
+      selectedIds: new Set(),
+      selectedDupePaths: new Set(),
+      currentDiskMapPath: '',
+      currentCategory: 'all',
+      autoCleanEnabled: false
+    };
+
+    // Filenames/paths come from the filesystem and are never safe to drop
+    // directly into HTML or into an inline onclick string: a crafted name
+    // could inject markup or break out of the quoted JS literal. escapeHtml()
+    // neutralizes text/attribute content; ref()/deref() hand arbitrary
+    // strings to onclick handlers via an opaque id instead of ever splicing
+    // raw text into JS source.
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+    let __refSeq = 0;
+    const __refStore = new Map();
+    function ref(value) {
+      const id = __refSeq++;
+      __refStore.set(id, value);
+      return id;
+    }
+    function deref(id) {
+      return __refStore.get(id);
+    }
+
+    function showToast(msg, isError = false) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+      toastMsg.textContent = msg;
+      if (isError) {
+        toastIcon.className = "fa-solid fa-circle-exclamation text-rose-400 text-lg";
+        toast.firstElementChild.className = "glass-card bg-slate-900/95 border border-rose-500/40 rounded-xl px-4 py-3 shadow-2xl flex items-center gap-3";
+      } else {
+        toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-lg";
+        toast.firstElementChild.className = "glass-card bg-slate-900/95 border border-emerald-500/40 rounded-xl px-4 py-3 shadow-2xl flex items-center gap-3";
+      }
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      setTimeout(() => { toast.classList.add('translate-y-24', 'opacity-0'); }, 3500);
+    }
+
+    async function fetchDiskAndRamStatus() {
+      try {
+        const [diskRes, ramRes] = await Promise.all([fetch('/api/status'), fetch('/api/ram')]);
+        appData.disk = await diskRes.json();
+        appData.ram = await ramRes.json();
+        updateDiskDisplay(appData.disk);
+        updateRamDisplay(appData.ram);
+      } catch (e) { console.error(e); }
+    }
+
+    function updateDiskDisplay(disk) {
+      document.getElementById('percentUsedText').textContent = `${disk.percent_used}%`;
+      document.getElementById('diskFreeText').textContent = disk.free;
+      document.getElementById('diskTotalText').textContent = disk.total;
+
+      const circle = document.getElementById('diskProgressCircle');
+      const circumference = 251.2;
+      const offset = circumference - (circumference * (disk.percent_used / 100));
+      circle.style.strokeDashoffset = offset;
+      if (disk.percent_used > 90) circle.setAttribute('stroke', '#ef4444');
+      else if (disk.percent_used > 75) circle.setAttribute('stroke', '#f59e0b');
+      else circle.setAttribute('stroke', '#10b981');
+    }
+
+    function updateRamDisplay(ram) {
+      document.getElementById('ramPercentText').textContent = `${ram.used_percent}%`;
+      document.getElementById('ramFreeText').textContent = ram.free;
+      document.getElementById('ramTotalText').textContent = ram.total;
+
+      const circle = document.getElementById('ramProgressCircle');
+      const circumference = 251.2;
+      const offset = circumference - (circumference * (ram.used_percent / 100));
+      circle.style.strokeDashoffset = offset;
+    }
+
+    async function checkAutoClean() {
+      try {
+        const res = await fetch('/api/auto-clean');
+        const data = await res.json();
+        appData.autoCleanEnabled = data.enabled;
+        const statusText = document.getElementById('autoCleanStatusText');
+        const icon = document.getElementById('autoCleanIcon');
+        if (data.enabled) {
+          statusText.textContent = "Weekly (Sun 3AM)";
+          statusText.className = "text-emerald-400 font-bold";
+          icon.className = "fa-solid fa-clock-rotate-left text-emerald-400";
+        } else {
+          statusText.textContent = "Off";
+          statusText.className = "text-slate-400 font-normal";
+          icon.className = "fa-solid fa-clock-rotate-left text-slate-400";
+        }
+      } catch (e) {}
+    }
+
+    async function toggleAutoClean() {
+      const newState = !appData.autoCleanEnabled;
+      try {
+        const res = await fetch('/api/toggle-auto-clean', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enable: newState })
+        });
+        const data = await res.json();
+        appData.autoCleanEnabled = data.enabled;
+        checkAutoClean();
+        showToast(newState ? 'Automated weekly cleanup enabled!' : 'Automated cleanup disabled.');
+      } catch (e) {
+        showToast('Failed to toggle auto-clean', true);
+      }
+    }
+
+    async function scanTargets() {
+      try {
+        const res = await fetch('/api/scan');
+        const data = await res.json();
+        appData.targets = data.items;
+        document.getElementById('statSafeText').textContent = data.total_safe_formatted;
+        document.getElementById('btnSafeSize').textContent = data.total_safe_formatted;
+        
+        let rebuildableBytes = 0;
+        data.items.forEach(i => {
+          if (i.safety === 'rebuildable') rebuildableBytes += i.size_bytes;
+        });
+        document.getElementById('statRebuildText').textContent = formatBytes(rebuildableBytes);
+        document.getElementById('cacheItemsCount').textContent = data.items.length;
+        renderTargets();
+      } catch (e) { console.error(e); }
+    }
+
+    async function scanLibrary(forceRefresh = false) {
+      const container = document.getElementById('libraryItemsContainer');
+      container.innerHTML = `<div class="col-span-2 py-12 text-center text-slate-500"><i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-400 mr-2"></i>Scanning Library, Caches & Hidden directories...</div>`;
+
+      try {
+        const res = await fetch('/api/library');
+        const data = await res.json();
+        appData.library = data;
+
+        document.getElementById('libCardUserSize').textContent = data.totals.user_library;
+        document.getElementById('libCardUserCount').textContent = data.user_library.length;
+
+        document.getElementById('libCardAppSupSize').textContent = data.totals.app_support;
+        document.getElementById('libCardAppSupCount').textContent = data.app_support.length;
+
+        document.getElementById('libCardCachesSize').textContent = data.totals.user_caches;
+        document.getElementById('libCardCachesCount').textContent = data.user_caches.length;
+
+        document.getElementById('libCardDotsSize').textContent = data.totals.hidden_folders;
+        document.getElementById('libCardDotsCount').textContent = data.hidden_folders.length;
+
+        document.getElementById('tabLibraryTotalSize').textContent = data.totals.grand_total;
+
+        renderLibraryItems();
+      } catch (e) {
+        container.innerHTML = `<div class="col-span-2 py-12 text-center text-rose-400">Failed to load Library inventory.</div>`;
+      }
+    }
+
+    function setLibraryFilter(filter) {
+      appData.currentLibraryFilter = filter;
+      document.querySelectorAll('.lib-filter-pill').forEach(btn => {
+        if (btn.getAttribute('onclick').includes(`'${filter}'`)) {
+          btn.className = "lib-filter-pill active px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        } else {
+          btn.className = "lib-filter-pill px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60";
+        }
+      });
+      renderLibraryItems();
+    }
+
+    function renderLibraryItems() {
+      if (!appData.library) return;
+      const container = document.getElementById('libraryItemsContainer');
+      const search = (document.getElementById('librarySearchInput')?.value || '').toLowerCase().trim();
+      const filter = appData.currentLibraryFilter;
+
+      let allItems = [];
+      if (filter === 'all' || filter === 'user_library') allItems = allItems.concat(appData.library.user_library);
+      if (filter === 'all' || filter === 'app_support') allItems = allItems.concat(appData.library.app_support);
+      if (filter === 'all' || filter === 'user_caches') allItems = allItems.concat(appData.library.user_caches);
+      if (filter === 'all' || filter === 'hidden_folders') allItems = allItems.concat(appData.library.hidden_folders);
+      if (filter === 'all' || filter === 'system_library') allItems = allItems.concat(appData.library.system_library);
+
+      const totalAll = (appData.library.user_library.length + appData.library.app_support.length + appData.library.user_caches.length + appData.library.hidden_folders.length + appData.library.system_library.length);
+      const allCountEl = document.getElementById('libFilterAllCount');
+      if (allCountEl) allCountEl.textContent = totalAll;
+
+      if (search) {
+        allItems = allItems.filter(i => i.name.toLowerCase().includes(search) || i.path.toLowerCase().includes(search) || (i.description && i.description.toLowerCase().includes(search)));
+      }
+
+      allItems.sort((a, b) => b.size_bytes - a.size_bytes);
+
+      if (allItems.length === 0) {
+        container.innerHTML = `<div class="col-span-2 py-12 text-center text-slate-500">No folders match your current filter or search.</div>`;
+        return;
+      }
+
+      const maxSize = Math.max(...allItems.map(i => i.size_bytes), 1);
+
+      container.innerHTML = allItems.map(item => {
+        const percent = Math.max(Math.round((item.size_bytes / maxSize) * 100), 2);
+        let catBadge = "";
+        let iconClass = "fa-folder text-amber-400";
+        let barGrad = "from-amber-500 to-yellow-400";
+
+        if (item.category === 'app_support') {
+          catBadge = `<span class="px-2 py-0.5 rounded text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">App Support</span>`;
+          iconClass = "fa-shapes text-indigo-400";
+          barGrad = "from-indigo-500 to-blue-400";
+        } else if (item.category === 'user_caches') {
+          catBadge = `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Cache</span>`;
+          iconClass = "fa-bolt-lightning text-emerald-400";
+          barGrad = "from-emerald-500 to-teal-400";
+        } else if (item.category === 'hidden_folders') {
+          catBadge = `<span class="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30">Hidden Dot</span>`;
+          iconClass = "fa-eye-slash text-purple-400";
+          barGrad = "from-purple-500 to-pink-400";
+        } else if (item.category === 'system_library') {
+          catBadge = `<span class="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 border border-slate-600">System</span>`;
+          iconClass = "fa-microchip text-slate-400";
+          barGrad = "from-slate-500 to-slate-400";
+        } else {
+          catBadge = `<span class="px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">Library</span>`;
+        }
+
+        const canClean = item.can_clean || item.category === 'user_caches';
+
+        return `
+          <div class="glass-card rounded-2xl p-4 border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between gap-3">
+            <div>
+              <div class="flex items-start justify-between gap-3 mb-1">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid ${iconClass} text-sm"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <div class="font-bold text-xs text-white truncate hover:text-emerald-400 cursor-pointer" onclick="openInDiskMap(deref(${ref(item.path)}))" title="${escapeHtml(item.path)}">${escapeHtml(item.name)}</div>
+                    <div class="text-[10px] text-slate-500 font-mono truncate max-w-[280px]" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div>
+                  </div>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  <span class="text-sm font-black font-mono text-emerald-400">${item.size_formatted}</span>
+                  <div class="mt-0.5">${catBadge}</div>
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-2 line-clamp-2">${escapeHtml(item.description || '')}</p>
+            </div>
+
+            <div class="space-y-3 pt-2 border-t border-slate-800/80">
+              <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                <div class="h-full rounded-full bg-gradient-to-r ${barGrad} transition-all duration-500" style="width: ${percent}%"></div>
+              </div>
+
+              <div class="flex items-center justify-between text-xs pt-1">
+                <button onclick="openInDiskMap(deref(${ref(item.path)}))" class="px-2.5 py-1 text-[11px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 flex items-center gap-1.5 transition active:scale-95" title="Explore subdirectories in Visual Disk Map">
+                  <i class="fa-solid fa-chart-pie text-emerald-400"></i>
+                  <span>Explore in Disk Map</span>
+                </button>
+
+                <div class="flex items-center gap-1.5">
+                  <button onclick="revealInFinder(deref(${ref(item.path)}))" class="px-2.5 py-1 text-[11px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 flex items-center gap-1 transition" title="Show folder in macOS Finder">
+                    <i class="fa-solid fa-folder-open"></i>
+                    <span>Finder</span>
+                  </button>
+
+                  ${canClean ? `
+                    <button onclick="cleanLibraryFolder(deref(${ref(item.path)}), deref(${ref(item.name)}))" class="px-2.5 py-1 text-[11px] rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1 transition" title="Purge contents of this folder">
+                      <i class="fa-solid fa-trash-can"></i>
+                      <span>Purge</span>
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openInDiskMap(path) {
+      switchTab('diskmap');
+      loadDiskMap(path);
+    }
+
+    async function cleanLibraryFolder(path, name) {
+      if (!confirm(`Are you sure you want to purge the contents of:\n${name}\n(${path})?\n\nThis will safely empty the folder to free space.`)) return;
+      document.getElementById('appStatus').textContent = `Purging ${name}...`;
+      try {
+        const res = await fetch('/api/clean-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Purged ${name} contents successfully!`);
+          await scanLibrary(true);
+          await fetchDiskAndRamStatus();
+        } else {
+          showToast(data.message || 'Error purging folder', true);
+        }
+      } catch (e) {
+        showToast('Failed to purge folder', true);
+      } finally {
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    function toggleDiskMapHidden() {
+      appData.diskMapShowHidden = !appData.diskMapShowHidden;
+      const icon = document.getElementById('diskMapHiddenIcon');
+      const text = document.getElementById('diskMapHiddenText');
+      const btn = document.getElementById('diskMapHiddenToggle');
+      if (appData.diskMapShowHidden) {
+        text.textContent = "Hidden: On";
+        btn.className = "px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 transition";
+        icon.className = "fa-solid fa-eye";
+      } else {
+        text.textContent = "Hidden: Off";
+        btn.className = "px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 flex items-center gap-1.5 transition";
+        icon.className = "fa-solid fa-eye-slash";
+      }
+      loadDiskMap(appData.currentDiskMapPath);
+    }
+
+    async function scanApps() {
+      const tbody = document.getElementById('appsTbody');
+      tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans"><i class="fa-solid fa-circle-notch fa-spin text-lg text-emerald-400 mr-2"></i>Scanning all installed applications...</td></tr>`;
+
+      try {
+        const res = await fetch('/api/apps');
+        const data = await res.json();
+        appData.apps = data.apps || [];
+        document.getElementById('tabAppsCount').textContent = data.count;
+        document.getElementById('appsTotalSize').textContent = data.total_formatted;
+
+        if (data.apps.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">No applications found.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.apps.map(a => `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+              <i class="fa-regular fa-window-maximize text-emerald-400"></i>
+              <span>${escapeHtml(a.name)}</span>
+              ${a.is_user_app ? '<span class="px-1.5 py-0.2 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700">User App</span>' : ''}
+            </td>
+            <td class="py-3 px-4 font-bold text-emerald-400">${a.size_formatted}</td>
+            <td class="py-3 px-4 text-slate-400 truncate max-w-[340px]" title="${escapeHtml(a.path)}">${escapeHtml(a.path)}</td>
+            <td class="py-3 px-4 text-right space-x-2 font-sans">
+              <button onclick="revealInFinder(deref(${ref(a.path)}))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition" title="Show in Finder">
+                <i class="fa-solid fa-folder-open"></i>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-rose-400 font-sans">Failed to scan applications.</td></tr>`;
+      }
+    }
+
+    async function scanPackages() {
+      try {
+        const res = await fetch('/api/packages');
+        const data = await res.json();
+        appData.packages = data;
+        const totalCount = data.counts.brew + data.counts.npm + data.counts.pip;
+        document.getElementById('tabPackagesCount').textContent = totalCount;
+        document.getElementById('brewTotalSize').textContent = data.brew_total_formatted;
+        document.getElementById('brewSizeSub').textContent = data.brew_total_formatted;
+        document.getElementById('brewCount').textContent = data.counts.brew;
+        document.getElementById('npmCount').textContent = data.counts.npm;
+        document.getElementById('pipCount').textContent = data.counts.pip;
+
+        // Render Brew list
+        const brewList = document.getElementById('brewList');
+        brewList.innerHTML = data.brew.map(b => `
+          <div class="flex items-center justify-between p-2 rounded bg-slate-900/60 hover:bg-slate-800/50">
+            <span class="text-white font-medium truncate max-w-[200px]" title="${escapeHtml(b.name)}">${escapeHtml(b.name)}</span>
+            <span class="text-emerald-400 font-bold">${b.size_formatted}</span>
+          </div>
+        `).join('');
+
+        // Render NPM list
+        const npmList = document.getElementById('npmList');
+        npmList.innerHTML = data.npm.map(n => `
+          <div class="flex items-center justify-between p-1.5 rounded bg-slate-900/60 hover:bg-slate-800/50">
+            <span class="text-slate-200 truncate max-w-[180px]">${escapeHtml(n.name)}</span>
+            <span class="text-slate-400 text-[11px]">${escapeHtml(n.version)}</span>
+          </div>
+        `).join('');
+
+        // Render Pip list
+        const pipList = document.getElementById('pipList');
+        pipList.innerHTML = data.pip.map(p => `
+          <div class="flex items-center justify-between p-1.5 rounded bg-slate-900/60 hover:bg-slate-800/50">
+            <span class="text-slate-200 truncate max-w-[180px]">${escapeHtml(p.name)}</span>
+            <span class="text-slate-400 text-[11px]">${escapeHtml(p.version)}</span>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function runBrewCleanup() {
+      const btn = document.getElementById('brewCleanupBtn');
+      btn.disabled = true;
+      document.getElementById('appStatus').textContent = 'Cleaning brew packages...';
+      try {
+        const res = await fetch('/api/brew-cleanup', { method: 'POST' });
+        const data = await res.json();
+        showToast('Brew cleanup complete!');
+        await Promise.all([fetchDiskAndRamStatus(), scanPackages()]);
+      } catch (e) {
+        showToast('Error during brew cleanup', true);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    async function scanStartup() {
+      const tbody = document.getElementById('startupTbody');
+      tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500 font-sans"><i class="fa-solid fa-circle-notch fa-spin text-lg text-emerald-400 mr-2"></i>Inspecting startup items...</td></tr>`;
+
+      try {
+        const res = await fetch('/api/startup');
+        const data = await res.json();
+        appData.startup = data.items || [];
+        document.getElementById('tabStartupCount').textContent = data.count;
+
+        if (data.items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500 font-sans">No launch agents or daemons found.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.items.map(it => `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-gear ${it.is_disabled ? 'text-slate-600' : 'text-indigo-400'}"></i>
+              <span class="truncate max-w-[240px]" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</span>
+            </td>
+            <td class="py-3 px-4 font-sans"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700">${escapeHtml(it.type)}</span></td>
+            <td class="py-3 px-4 text-slate-400 truncate max-w-[280px]" title="${escapeHtml(it.program || it.path)}">${escapeHtml(it.program || it.file_name)}</td>
+            <td class="py-3 px-4 font-sans font-bold">
+              ${it.is_disabled ? '<span class="text-slate-500">Disabled</span>' : '<span class="text-emerald-400">Active</span>'}
+            </td>
+            <td class="py-3 px-4 text-right space-x-2 font-sans">
+              ${it.can_toggle ? `
+                <button onclick="toggleStartup(deref(${ref(it.path)}))" class="px-2.5 py-1 rounded text-xs font-semibold ${it.is_disabled ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-rose-300'} transition">
+                  ${it.is_disabled ? 'Enable' : 'Disable'}
+                </button>
+              ` : '<span class="text-slate-600 text-[11px]">System Locked</span>'}
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-400 font-sans">Failed to scan startup items.</td></tr>`;
+      }
+    }
+
+    async function toggleStartup(path) {
+      try {
+        const res = await fetch('/api/toggle-startup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+        const data = await res.json();
+        showToast(data.message);
+        await scanStartup();
+      } catch (e) {
+        showToast('Error toggling startup item', true);
+      }
+    }
+
+    async function scanProjects() {
+      const tbody = document.getElementById('projectsTbody');
+      tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500 font-sans"><i class="fa-solid fa-circle-notch fa-spin text-lg text-indigo-400 mr-2"></i>Scanning project build folders...</td></tr>`;
+
+      try {
+        const res = await fetch('/api/projects');
+        const data = await res.json();
+        appData.projects = data.artifacts || [];
+        document.getElementById('projectBuildCount').textContent = `${data.artifacts.length} detected`;
+        document.getElementById('tabProjectsCount').textContent = data.artifacts.length;
+        document.getElementById('projectBuildsTotalSize').textContent = data.total_formatted;
+        document.getElementById('cleanAllBuildsBtn').disabled = data.artifacts.length === 0;
+
+        if (data.artifacts.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500 font-sans">No project build artifacts found.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.artifacts.map(a => `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-cube text-indigo-400"></i>
+              <span>${escapeHtml(a.project)}</span>
+            </td>
+            <td class="py-3 px-4">
+              <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">${escapeHtml(a.type_label)}</span>
+            </td>
+            <td class="py-3 px-4 font-bold text-emerald-400 font-mono">${a.size_formatted}</td>
+            <td class="py-3 px-4 text-slate-400 font-mono truncate max-w-[280px]" title="${escapeHtml(a.path)}">${escapeHtml(a.path)}</td>
+            <td class="py-3 px-4 text-right space-x-2 font-sans">
+              <button onclick="revealInFinder(deref(${ref(a.path)}))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition" title="Show in Finder">
+                <i class="fa-solid fa-folder-open"></i>
+              </button>
+              <button onclick="cleanProjectPath(deref(${ref(a.path)}), deref(${ref(a.project + ' - ' + a.type_label)}))" class="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded text-xs font-medium transition active:scale-95">
+                Clean
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-400 font-sans">Failed to scan projects.</td></tr>`;
+      }
+    }
+
+    async function scanLeftovers() {
+      const tbody = document.getElementById('leftoversTbody');
+      tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans"><i class="fa-solid fa-circle-notch fa-spin text-lg text-emerald-400 mr-2"></i>Finding app leftovers...</td></tr>`;
+
+      try {
+        const res = await fetch('/api/leftovers');
+        const data = await res.json();
+        appData.leftovers = data.leftovers || [];
+        document.getElementById('tabLeftoversCount').textContent = data.leftovers.length;
+
+        if (data.leftovers.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">No orphaned application folders found!</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.leftovers.map(item => `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+              <i class="fa-regular fa-trash-can text-amber-400"></i>
+              <span>${escapeHtml(item.name)}</span>
+            </td>
+            <td class="py-3 px-4 font-bold text-emerald-400">${item.size_formatted}</td>
+            <td class="py-3 px-4 text-slate-400 truncate max-w-[320px]" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</td>
+            <td class="py-3 px-4 text-right space-x-2 font-sans">
+              <button onclick="revealInFinder(deref(${ref(item.path)}))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition" title="Show in Finder">
+                <i class="fa-solid fa-folder-open"></i>
+              </button>
+              <button onclick="cleanLeftoverPath(deref(${ref(item.path)}), deref(${ref(item.name)}))" class="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded text-xs transition">
+                Delete
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-rose-400 font-sans">Failed to scan leftovers.</td></tr>`;
+      }
+    }
+
+    async function cleanLeftoverPath(path, name) {
+      if (!confirm(`Delete leftover folder for "${name}"?\n${path}`)) return;
+      try {
+        const res = await fetch('/api/clean-path', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+        showToast(`Deleted leftover for ${name}`);
+        await Promise.all([fetchDiskAndRamStatus(), scanLeftovers()]);
+      } catch (e) {
+        showToast('Error removing leftover', true);
+      }
+    }
+
+    async function scanGitRepos() {
+      const tbody = document.getElementById('gitTbody');
+      tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans"><i class="fa-solid fa-circle-notch fa-spin text-lg text-emerald-400 mr-2"></i>Analyzing git repositories...</td></tr>`;
+
+      try {
+        const res = await fetch('/api/git-repos');
+        const data = await res.json();
+        appData.gitRepos = data.repos || [];
+
+        if (data.repos.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">All git repositories are lean!</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.repos.map(r => `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-sans font-bold text-white flex items-center gap-2">
+              <i class="fa-brands fa-git-alt text-amber-500"></i>
+              <span>${escapeHtml(r.name)}</span>
+            </td>
+            <td class="py-3 px-4 font-bold text-emerald-400">${r.size_formatted}</td>
+            <td class="py-3 px-4 text-slate-400 truncate max-w-[320px]" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</td>
+            <td class="py-3 px-4 text-right space-x-2 font-sans">
+              <button onclick="optimizeSingleGit(deref(${ref(r.path)}), deref(${ref(r.name)}))" class="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 rounded text-xs transition">
+                Compress (gc)
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-rose-400 font-sans">Failed to scan git repos.</td></tr>`;
+      }
+    }
+
+    async function optimizeSingleGit(path, name) {
+      document.getElementById('appStatus').textContent = `Compressing ${name}...`;
+      try {
+        const res = await fetch('/api/optimize-git', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths: [path] })
+        });
+        showToast(`Compressed git repo: ${name}`);
+        await scanGitRepos();
+      } catch (e) {
+        showToast('Error compressing repo', true);
+      } finally {
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    async function optimizeAllGitRepos() {
+      if (appData.gitRepos.length === 0) return;
+      if (!confirm(`Run git garbage collection on all repositories?`)) return;
+
+      document.getElementById('appStatus').textContent = 'Compressing all git repos...';
+      try {
+        const paths = appData.gitRepos.map(r => r.path);
+        const res = await fetch('/api/optimize-git', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths })
+        });
+        showToast(`Optimized ${appData.gitRepos.length} repositories!`);
+        await scanGitRepos();
+      } catch (e) {
+        showToast('Error compressing git repos', true);
+      } finally {
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    async function loadDiskMap(targetPath = "") {
+      const container = document.getElementById('diskMapContainer');
+      const breadcrumbs = document.getElementById('diskMapBreadcrumbs');
+      container.innerHTML = `<div class="py-12 text-center text-slate-500"><i class="fa-solid fa-circle-notch fa-spin text-xl text-emerald-400 mr-2"></i>Analyzing folder distribution...</div>`;
+
+      try {
+        const showHidden = appData.diskMapShowHidden ? '1' : '0';
+        const res = await fetch(`/api/tree?path=${encodeURIComponent(targetPath)}&hidden=${showHidden}`);
+        const data = await res.json();
+        appData.currentDiskMapPath = data.current_path;
+
+        const parts = data.current_path.split('/').filter(Boolean);
+        let breadcrumbHtml = `<button onclick="loadDiskMap('')" class="text-emerald-400 hover:underline flex items-center gap-1 font-bold"><i class="fa-solid fa-house"></i> Home</button>`;
+        let runningPath = "";
+        parts.forEach((p, idx) => {
+          runningPath += "/" + p;
+          if (idx >= 2) {
+            const thisPath = runningPath;
+            breadcrumbHtml += ` <span class="text-slate-600">/</span> <button onclick="loadDiskMap(deref(${ref(thisPath)}))" class="text-slate-300 hover:text-white truncate max-w-[120px]">${escapeHtml(p)}</button>`;
+          }
+        });
+        breadcrumbs.innerHTML = breadcrumbHtml;
+        document.getElementById('diskMapItemCount').textContent = `${data.items.length} items`;
+
+        if (data.items.length === 0) {
+          container.innerHTML = `<div class="py-10 text-center text-slate-500">Folder is empty or contents are below 10MB.</div>`;
+          return;
+        }
+
+        const maxSize = Math.max(...data.items.map(i => i.size_bytes), 1);
+        container.innerHTML = data.items.map(item => {
+          const percent = Math.max(Math.round((item.size_bytes / maxSize) * 100), 2);
+          const isDir = item.is_dir;
+          return `
+            <div class="group bg-slate-900/50 hover:bg-slate-800/60 p-3 rounded-xl border border-slate-800/80 transition flex items-center justify-between gap-4">
+              <div class="flex items-center gap-3 min-w-0 flex-1">
+                <i class="${isDir ? 'fa-solid fa-folder text-amber-400' : 'fa-regular fa-file text-slate-400'} text-base"></i>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-xs text-white truncate cursor-pointer hover:text-emerald-400" onclick="${isDir ? `loadDiskMap(deref(${ref(item.path)}))` : ''}">${escapeHtml(item.name)}</span>
+                    <span class="text-xs font-mono font-bold text-emerald-400">${item.size_formatted}</span>
+                  </div>
+                  <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500" style="width: ${percent}%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 flex-shrink-0">
+                ${isDir ? `
+                  <button onclick="loadDiskMap(deref(${ref(item.path)}))" class="px-2.5 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="Open directory">
+                    <i class="fa-solid fa-arrow-right"></i>
+                  </button>
+                ` : ''}
+                <button onclick="revealInFinder(deref(${ref(item.path)}))" class="px-2.5 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="Show in Finder">
+                  <i class="fa-solid fa-folder-open"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        container.innerHTML = `<div class="py-10 text-center text-rose-400">Failed to load disk map.</div>`;
+      }
+    }
+
+    function reloadCurrentDiskMap() {
+      loadDiskMap(appData.currentDiskMapPath);
+    }
+
+    async function scanDuplicates() {
+      const container = document.getElementById('duplicatesList');
+      container.innerHTML = `<div class="py-12 text-center text-slate-500"><i class="fa-solid fa-circle-notch fa-spin text-xl text-indigo-400 mr-2"></i>Analyzing exact duplicate files...</div>`;
+
+      try {
+        const res = await fetch('/api/duplicates');
+        const data = await res.json();
+        appData.duplicates = data.groups || [];
+        appData.selectedDupePaths.clear();
+        document.getElementById('dupeWastedText').textContent = data.wasted_formatted;
+        updateDupeButtons();
+
+        if (data.groups.length === 0) {
+          container.innerHTML = `<div class="glass-card rounded-2xl p-10 text-center text-slate-500">No duplicate files found in Downloads or Desktop!</div>`;
+          return;
+        }
+
+        container.innerHTML = data.groups.map((g, gIdx) => `
+          <div class="glass-card rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                <span class="font-bold text-xs text-white">Group #${gIdx + 1} (${g.count} identical files)</span>
+              </div>
+              <span class="text-xs font-mono font-bold text-emerald-400">${g.file_size} each</span>
+            </div>
+
+            <div class="space-y-2">
+              ${g.files.map((f, fIdx) => `
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/50 hover:bg-slate-800/40 text-xs font-mono">
+                  <div class="flex items-center gap-3 truncate max-w-[70%]">
+                    <input type="checkbox" onchange="toggleDupeSelect(deref(${ref(f.path)}), this.checked)" ${fIdx > 0 ? 'checked' : ''} class="w-4 h-4 rounded border-slate-700 bg-slate-800 text-rose-500 focus:ring-rose-500 dupe-cb">
+                    <span class="font-sans font-medium text-slate-200 truncate" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+                    ${fIdx === 0 ? '<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-sans text-[10px]">NEWEST</span>' : ''}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button onclick="revealInFinder(deref(${ref(f.path)}))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 font-sans text-[11px]" title="Reveal">
+                      <i class="fa-solid fa-folder-open"></i>
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `).join('');
+
+        data.groups.forEach(g => {
+          g.files.slice(1).forEach(f => appData.selectedDupePaths.add(f.path));
+        });
+        updateDupeButtons();
+      } catch (e) {
+        container.innerHTML = `<div class="py-10 text-center text-rose-400">Failed to scan duplicates.</div>`;
+      }
+    }
+
+    function toggleDupeSelect(path, checked) {
+      if (checked) appData.selectedDupePaths.add(path);
+      else appData.selectedDupePaths.delete(path);
+      updateDupeButtons();
+    }
+
+    function autoSelectDuplicates() {
+      appData.selectedDupePaths.clear();
+      appData.duplicates.forEach(g => {
+        g.files.slice(1).forEach(f => appData.selectedDupePaths.add(f.path));
+      });
+      scanDuplicates();
+    }
+
+    function updateDupeButtons() {
+      const count = appData.selectedDupePaths.size;
+      document.getElementById('selectedDupesCount').textContent = count;
+      document.getElementById('deleteDupesBtn').disabled = count === 0;
+    }
+
+    async function cleanSelectedDuplicates() {
+      const paths = Array.from(appData.selectedDupePaths);
+      if (paths.length === 0) return;
+      if (!confirm(`Permanently delete ${paths.length} duplicate files?`)) return;
+
+      try {
+        const res = await fetch('/api/clean-duplicates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths })
+        });
+        showToast(`Deleted ${paths.length} duplicate files!`);
+        await Promise.all([fetchDiskAndRamStatus(), scanDuplicates()]);
+      } catch (e) {
+        showToast('Error removing duplicates', true);
+      }
+    }
+
+    async function scanInstallers() {
+      const tbody = document.getElementById('installersTbody');
+      tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans"><i class="fa-solid fa-circle-notch fa-spin text-lg text-emerald-400 mr-2"></i>Finding downloaded installer packages...</td></tr>`;
+
+      try {
+        const res = await fetch('/api/installers');
+        const data = await res.json();
+        appData.installers = data.installers || [];
+        document.getElementById('installersTotalCount').textContent = data.installers.length;
+        document.getElementById('installersTotalSize').textContent = data.total_formatted;
+
+        if (data.installers.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">No installer packages found.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.installers.map(f => `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-sans font-medium text-white flex items-center gap-2">
+              <i class="fa-solid fa-compact-disc text-indigo-400"></i>
+              <span class="truncate max-w-[280px]" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+            </td>
+            <td class="py-3 px-4 font-bold text-emerald-400">${f.size_formatted}</td>
+            <td class="py-3 px-4 text-slate-400 truncate max-w-[320px]" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</td>
+            <td class="py-3 px-4 text-right space-x-2 font-sans">
+              <button onclick="revealInFinder(deref(${ref(f.path)}))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition" title="Show in Finder">
+                <i class="fa-solid fa-folder-open"></i>
+              </button>
+              <button onclick="deleteLargeFile(deref(${ref(f.path)}))" class="px-2 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded text-xs transition" title="Move to Trash">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-rose-400 font-sans">Failed to scan installers.</td></tr>`;
+      }
+    }
+
+    async function systemFlush() {
+      const btn = document.getElementById('flushBtn');
+      btn.disabled = true;
+      document.getElementById('appStatus').textContent = 'Flushing caches...';
+      try {
+        const res = await fetch('/api/system-flush', { method: 'POST' });
+        const data = await res.json();
+        showToast('Flushed QuickLook thumbnail & DNS caches!');
+        await fetchDiskAndRamStatus();
+      } catch (e) {
+        showToast('Error during system flush', true);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    function renderTargets() {
+      const container = document.getElementById('targetCardsGrid');
+      const filtered = appData.targets.filter(t => {
+        if (appData.currentCategory === 'all') return true;
+        return t.category === appData.currentCategory;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="col-span-2 py-10 text-center text-slate-500">No items in this category.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const isChecked = appData.selectedIds.has(t.id);
+        const isZero = t.size_bytes === 0;
+
+        let badgeBg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+        let badgeLabel = 'SAFE';
+        if (t.safety === 'rebuildable') {
+          badgeBg = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+          badgeLabel = 'REBUILDABLE';
+        } else if (t.safety === 'review') {
+          badgeBg = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+          badgeLabel = 'REVIEW';
+        }
+
+        return `
+          <div class="glass-card rounded-xl p-4 flex flex-col justify-between transition relative ${isChecked ? 'ring-1 ring-emerald-500/40 bg-slate-800/90' : ''}">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-3 min-w-0">
+                <input type="checkbox" onchange="toggleItemSelect('${t.id}', this.checked)" ${isChecked ? 'checked' : ''} class="mt-1 w-4 h-4 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-sm text-white">${escapeHtml(t.name)}</span>
+                    <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border ${badgeBg}">${badgeLabel}</span>
+                  </div>
+                  <p class="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">${escapeHtml(t.description)}</p>
+                </div>
+              </div>
+
+              <div class="text-right flex-shrink-0">
+                <div class="text-sm font-extrabold font-mono ${isZero ? 'text-slate-500' : 'text-emerald-400'}">${t.size_formatted}</div>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2 truncate max-w-[240px]">
+                <button onclick="revealInFinder(deref(${ref(t.path)}))" title="Reveal in Finder" class="text-slate-400 hover:text-slate-200 transition">
+                  <i class="fa-solid fa-folder-open"></i>
+                </button>
+                <span class="text-slate-500 font-mono text-[11px] truncate" title="${escapeHtml(t.path)}">${escapeHtml(t.path)}</span>
+              </div>
+
+              <button onclick="cleanSingle('${t.id}')" ${isZero ? 'disabled' : ''} class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+                Clean
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      updateSelectionUI();
+    }
+
+    function toggleItemSelect(id, checked) {
+      if (checked) appData.selectedIds.add(id);
+      else appData.selectedIds.delete(id);
+      updateSelectionUI();
+    }
+
+    function toggleSelectAll(checked) {
+      if (checked) {
+        appData.targets.forEach(t => {
+          if (t.size_bytes > 0) appData.selectedIds.add(t.id);
+        });
+      } else {
+        appData.selectedIds.clear();
+      }
+      renderTargets();
+    }
+
+    function updateSelectionUI() {
+      const count = appData.selectedIds.size;
+      document.getElementById('selectedCountText').textContent = `${count} selected`;
+      document.getElementById('cleanSelectedBtn').disabled = count === 0;
+      document.getElementById('selectAllCheckbox').checked = count > 0 && count === appData.targets.filter(t => t.size_bytes > 0).length;
+    }
+
+    function filterCategory(cat) {
+      appData.currentCategory = cat;
+      document.querySelectorAll('.filter-pill').forEach(el => {
+        el.classList.remove('bg-slate-800', 'text-slate-200', 'border-slate-700');
+        el.classList.add('bg-slate-900/60', 'text-slate-400', 'border-slate-800');
+      });
+      event.target.classList.add('bg-slate-800', 'text-slate-200', 'border-slate-700');
+      renderTargets();
+    }
+
+    async function cleanSingle(id) {
+      const item = appData.targets.find(t => t.id === id);
+      if (!confirm(`Are you sure you want to clean "${item.name}"?`)) return;
+
+      document.getElementById('appStatus').textContent = `Cleaning ${item.name}...`;
+      try {
+        const res = await fetch('/api/clean', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: [id] })
+        });
+        showToast(`Cleaned ${item.name} successfully!`);
+        await rescanAll();
+      } catch (e) {
+        showToast('Error during cleanup', true);
+      } finally {
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    async function cleanSelected() {
+      const ids = Array.from(appData.selectedIds);
+      if (ids.length === 0) return;
+      if (!confirm(`Clean ${ids.length} selected targets?`)) return;
+
+      document.getElementById('appStatus').textContent = `Cleaning ${ids.length} items...`;
+      try {
+        const res = await fetch('/api/clean', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids })
+        });
+        appData.selectedIds.clear();
+        showToast(`Successfully cleaned ${ids.length} items!`);
+        await rescanAll();
+      } catch (e) {
+        showToast('Failed to clean selected items', true);
+      } finally {
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    async function optimizeAllSafe() {
+      const safeItems = appData.targets.filter(t => t.safety === 'safe' && t.size_bytes > 0);
+      if (safeItems.length === 0) {
+        showToast('No safe caches to clean right now.');
+        return;
+      }
+      const ids = safeItems.map(t => t.id);
+      if (!confirm(`Optimize all safe targets (${document.getElementById('btnSafeSize').textContent})?`)) return;
+
+      const btn = document.getElementById('optimizeSafeBtn');
+      btn.disabled = true;
+      document.getElementById('appStatus').textContent = 'Optimizing safe caches...';
+
+      try {
+        const res = await fetch('/api/clean', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids })
+        });
+        showToast('All safe targets optimized successfully!');
+        await rescanAll();
+      } catch (e) {
+        showToast('Error during optimization', true);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    async function cleanProjectPath(path, label) {
+      if (!confirm(`Delete build directory for ${label}?\n${path}`)) return;
+      document.getElementById('appStatus').textContent = `Cleaning ${label}...`;
+      try {
+        const res = await fetch('/api/clean-path', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Cleaned ${label}`);
+          await Promise.all([fetchDiskAndRamStatus(), scanProjects()]);
+        } else {
+          showToast(`Error: ${data.message}`, true);
+        }
+      } catch (e) {
+        showToast('Error during cleanup', true);
+      } finally {
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    async function cleanAllProjectBuilds() {
+      const builds = appData.projects.filter(p => p.type === 'build' || p.type === '.dart_tool');
+      if (builds.length === 0) {
+        showToast('No build directories to clean.');
+        return;
+      }
+      const totalSize = document.getElementById('projectBuildsTotalSize').textContent;
+      if (!confirm(`Clean ${builds.length} Flutter build & .dart_tool directories (${totalSize})?\n\nThey will safely regenerate when you build each project.`)) return;
+
+      document.getElementById('appStatus').textContent = 'Cleaning all project builds...';
+      try {
+        const paths = builds.map(b => b.path);
+        const res = await fetch('/api/clean-all-project-builds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths })
+        });
+        const data = await res.json();
+        showToast(`Cleaned ${data.count} project build directories!`);
+        await Promise.all([fetchDiskAndRamStatus(), scanProjects()]);
+      } catch (e) {
+        showToast('Error cleaning builds', true);
+      } finally {
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    async function loadLargeFiles() {
+      const tbody = document.getElementById('largeFilesTbody');
+      const minMb = document.getElementById('minMbSelect') ? document.getElementById('minMbSelect').value : 50;
+      tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans"><i class="fa-solid fa-circle-notch fa-spin text-lg text-emerald-400 mr-2"></i>Scanning for files (>${minMb}MB)...</td></tr>`;
+
+      try {
+        const res = await fetch(`/api/large-files?min_mb=${minMb}`);
+        const data = await res.json();
+        appData.largeFiles = data.files;
+        document.getElementById('largeFilesCount').textContent = data.files.length;
+
+        if (data.files.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">No files larger than ${minMb}MB found.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.files.map(f => `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-sans font-medium text-slate-200">
+              <div class="flex items-center gap-2">
+                <i class="fa-regular fa-file text-slate-400"></i>
+                <span class="truncate max-w-[260px]" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+              </div>
+            </td>
+            <td class="py-3 px-4 font-bold text-emerald-400">${f.size_formatted}</td>
+            <td class="py-3 px-4 text-slate-400 truncate max-w-[340px]" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</td>
+            <td class="py-3 px-4 text-right space-x-2 font-sans">
+              <button onclick="revealInFinder(deref(${ref(f.path)}))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition" title="Show in Finder">
+                <i class="fa-solid fa-folder-open"></i>
+              </button>
+              <button onclick="deleteLargeFile(deref(${ref(f.path)}))" class="px-2 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded text-xs transition" title="Move to Trash">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-rose-400 font-sans">Failed to scan large files.</td></tr>`;
+      }
+    }
+
+    async function deleteLargeFile(path) {
+      if (!confirm(`Move file to Trash?\n${path}`)) return;
+      try {
+        const res = await fetch('/api/delete-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('File moved to Trash');
+          loadLargeFiles();
+          if (appData.installers.length > 0) scanInstallers();
+          fetchDiskAndRamStatus();
+        } else {
+          showToast('Failed to delete file: ' + data.error, true);
+        }
+      } catch (e) {
+        showToast('Error removing file', true);
+      }
+    }
+
+    async function revealInFinder(path) {
+      try {
+        await fetch('/api/reveal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+      } catch (e) { console.error(e); }
+    }
+
+    // Maps each tab key to the exact id suffix used in the HTML
+    // (tabContent<Suffix> / tabBtn<Suffix>). A plain "capitalize the first
+    // letter" of the key doesn't work for ids with an internal capital, e.g.
+    // 'diskmap' -> tabContentDiskMap and 'largefiles' -> tabContentLargeFiles;
+    // that mismatch previously left both tabs permanently hidden.
+    const TAB_ID_SUFFIX = {
+      optimizer: 'Optimizer', library: 'Library', apps: 'Apps', packages: 'Packages',
+      startup: 'Startup', diskmap: 'DiskMap', projects: 'Projects', leftovers: 'Leftovers',
+      git: 'Git', duplicates: 'Duplicates', installers: 'Installers', largefiles: 'LargeFiles'
+    };
+
+    function switchTab(tab) {
+      Object.keys(TAB_ID_SUFFIX).forEach(t => {
+        const content = document.getElementById(`tabContent${TAB_ID_SUFFIX[t]}`);
+        const btn = document.getElementById(`tabBtn${TAB_ID_SUFFIX[t]}`);
+        if (content) content.classList.add('hidden');
+        if (btn) btn.className = "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2 transition";
+      });
+
+      const activeContent = document.getElementById(`tabContent${TAB_ID_SUFFIX[tab]}`);
+      const activeBtn = document.getElementById(`tabBtn${TAB_ID_SUFFIX[tab]}`);
+      const filterPills = document.getElementById('filterPills');
+
+      if (activeContent) activeContent.classList.remove('hidden');
+      if (activeBtn) activeBtn.className = "px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-2 transition";
+
+      if (tab === 'optimizer') filterPills.classList.remove('hidden');
+      else filterPills.classList.add('hidden');
+
+      if (tab === 'library' && !appData.library) scanLibrary();
+      if (tab === 'apps' && appData.apps.length === 0) scanApps();
+      if (tab === 'packages' && !appData.packages) scanPackages();
+      if (tab === 'startup' && appData.startup.length === 0) scanStartup();
+      if (tab === 'diskmap' && !appData.currentDiskMapPath) loadDiskMap('');
+      if (tab === 'projects' && appData.projects.length === 0) scanProjects();
+      if (tab === 'leftovers' && appData.leftovers.length === 0) scanLeftovers();
+      if (tab === 'git' && appData.gitRepos.length === 0) scanGitRepos();
+      if (tab === 'duplicates' && appData.duplicates.length === 0) scanDuplicates();
+      if (tab === 'installers' && appData.installers.length === 0) scanInstallers();
+      if (tab === 'largefiles' && appData.largeFiles.length === 0) loadLargeFiles();
+    }
+
+    async function rescanAll() {
+      const icon = document.getElementById('refreshIcon');
+      icon.classList.add('fa-spin');
+      document.getElementById('appStatus').textContent = 'Deep Scanning...';
+      try {
+        await Promise.all([
+          fetchDiskAndRamStatus(),
+          scanTargets(),
+          scanLibrary(true),
+          scanProjects(),
+          checkAutoClean()
+        ]);
+        showToast('Deep scan completed');
+      } finally {
+        icon.classList.remove('fa-spin');
+        document.getElementById('appStatus').textContent = 'Ready';
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      rescanAll();
+    });
+  </script>
+</body>
+</html>
