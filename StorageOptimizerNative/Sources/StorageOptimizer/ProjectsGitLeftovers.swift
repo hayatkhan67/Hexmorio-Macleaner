@@ -11,14 +11,17 @@ enum ProjectLocations {
             "Documents/projects", "Documents/Projects", "Documents/Developer",
             "Documents/Code", "Documents/workspace"
         ]
+        // Dedupe by on-disk identity, not path text: on case-insensitive APFS "projects"
+        // and "Projects" are the same folder, and a symlink can alias another candidate.
         var seen = Set<String>()
         var result: [String] = []
         for candidate in candidates {
             let path = "\(home)/\(candidate)"
-            var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { continue }
-            let standardized = (path as NSString).standardizingPath
-            guard seen.insert(standardized).inserted else { continue }
+            guard let attrs = try? fm.attributesOfItem(atPath: (path as NSString).resolvingSymlinksInPath),
+                  attrs[.type] as? FileAttributeType == .typeDirectory,
+                  let device = attrs[.systemNumber], let inode = attrs[.systemFileNumber]
+            else { continue }
+            guard seen.insert("\(device):\(inode)").inserted else { continue }
             result.append(path)
         }
         return result
@@ -67,8 +70,10 @@ enum ProjectBuildsScanner {
                         case "node_modules": typeLabel = "Node Modules"
                         default: typeLabel = "CocoaPods Pods"
                         }
+                        // "own_app/admin", not just "admin", so sub-apps of different projects are distinguishable.
+                        let projectLabel = String(candidate.dropFirst(projectsDir.count + 1))
                         results.append(ProjectArtifact(
-                            project: (candidate as NSString).lastPathComponent, type: target.replacingOccurrences(of: "ios/", with: ""),
+                            project: projectLabel, type: target.replacingOccurrences(of: "ios/", with: ""),
                             typeLabel: typeLabel, path: targetPath, sizeBytes: bytes
                         ))
                     }

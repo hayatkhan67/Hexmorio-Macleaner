@@ -39,6 +39,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Full Disk Access was never detected on macOS 27, so the banner stayed up and
   protected folders were skipped even after granting it.
 - Projects weren't detected on Macs that keep them outside `~/projects`.
+- Project Builds, Git Repos, and Large Files listed everything twice when
+  `~/projects` and `~/Projects` (the same folder on case-insensitive disks)
+  were both checked.
+- Project Builds now labels sub-apps with their parent (e.g. `own_app/admin`)
+  so different projects' folders with the same name no longer look duplicated.
 - Weekly Auto-Clean pointed at a script that only existed on the developer's
   Mac. It now runs the app itself in a headless `--auto-clean` mode, and
   existing schedules are repaired automatically on launch.
