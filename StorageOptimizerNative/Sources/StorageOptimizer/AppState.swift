@@ -81,6 +81,60 @@ final class AppState: ObservableObject {
     @Published var minMB = 50
     @Published var isScanningLargeFiles = false
 
+    // App lifecycle: permissions, login item, updates
+    @Published var hasFullDiskAccess = Permissions.hasFullDiskAccess
+    @Published var launchAtLogin = LaunchAtLogin.isEnabled
+    @Published var availableUpdate: AvailableUpdate?
+    @Published var isUpdating = false
+
+    init() {
+        Task { await startup() }
+    }
+
+    private func startup() async {
+        LaunchAtLogin.applyDefaultIfNeeded()
+        launchAtLogin = LaunchAtLogin.isEnabled
+        await Task.detached { SystemActions.repairAutoCleanIfNeeded() }.value
+        if Updater.isCheckDue { await checkForUpdates(userInitiated: false) }
+    }
+
+    func refreshPermissions() {
+        let had = hasFullDiskAccess
+        hasFullDiskAccess = Permissions.hasFullDiskAccess
+        launchAtLogin = LaunchAtLogin.isEnabled
+        if !had && hasFullDiskAccess { Task { await scanLibrary() } }
+    }
+
+    func toggleLaunchAtLogin() {
+        let (ok, message) = LaunchAtLogin.set(!launchAtLogin)
+        launchAtLogin = LaunchAtLogin.isEnabled
+        showToast(message, isError: !ok)
+    }
+
+    func checkForUpdates(userInitiated: Bool) async {
+        do {
+            availableUpdate = try await Updater.checkForUpdate()
+            if userInitiated && availableUpdate == nil {
+                showToast("You're on the latest version (\(Updater.currentVersion))")
+            }
+        } catch {
+            if userInitiated { showToast("Update check failed: \(error.localizedDescription)", isError: true) }
+        }
+    }
+
+    func installUpdate() async {
+        guard let update = availableUpdate, !isUpdating else { return }
+        isUpdating = true
+        statusText = "Downloading version \(update.version)..."
+        do {
+            try await Updater.install(update)
+        } catch {
+            showToast(error.localizedDescription, isError: true)
+            statusText = "Ready"
+            isUpdating = false
+        }
+    }
+
     func showToast(_ message: String, isError: Bool = false) {
         toast = ToastMessage(message: message, isError: isError)
         Task {

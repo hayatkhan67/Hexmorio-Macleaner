@@ -1,5 +1,55 @@
 import Foundation
 import AppKit
+import ServiceManagement
+
+enum LaunchAtLogin {
+    private static let didSetDefaultKey = "launchAtLoginDefaultApplied"
+
+    static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
+
+    @discardableResult
+    static func set(_ enable: Bool) -> (success: Bool, message: String) {
+        do {
+            if enable {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            return (false, "Couldn't change login item: \(error.localizedDescription)")
+        }
+        if enable && SMAppService.mainApp.status == .requiresApproval {
+            SMAppService.openSystemSettingsLoginItems()
+            return (false, "Approve Hexmorio Macleaner in System Settings > Login Items")
+        }
+        return (true, enable ? "Will start automatically at login" : "Won't start at login")
+    }
+
+    /// Turns launch-at-login on the first time an installed copy runs. Dev builds
+    /// launched from dist/ or .build/ are skipped so they don't become login items.
+    static func applyDefaultIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: didSetDefaultKey) else { return }
+        let path = Bundle.main.bundlePath
+        guard path.hasPrefix("/Applications/") || path.hasPrefix("\(NSHomeDirectory())/Applications/") else { return }
+        set(true)
+        defaults.set(true, forKey: didSetDefaultKey)
+    }
+}
+
+enum AutoClean {
+    static let argument = "--auto-clean"
+
+    /// Headless weekly cleanup run by the LaunchAgent: cleans only "Safe" targets
+    /// that don't need an admin password (nobody is around to type one at 3am).
+    static func runAndExit() -> Never {
+        let result = CleanTargetsService.scan()
+        for target in result.items where target.safety == .safe && target.sizeBytes > 0 && !CleanTargetsService.needsAdmin(target.id) {
+            CleanTargetsService.execute(target.id)
+        }
+        exit(0)
+    }
+}
 
 enum SystemActions {
     static let home = NSHomeDirectory()
@@ -16,11 +66,25 @@ enum SystemActions {
         FileManager.default.fileExists(atPath: plistPath)
     }
 
+    /// Re-points an existing weekly-clean LaunchAgent at this copy of the app
+    /// (older versions pointed it at a script that only existed on one machine).
+    static func repairAutoCleanIfNeeded() {
+        guard isAutoCleanEnabled(), let executable = Bundle.main.executablePath else { return }
+        let contents = (try? String(contentsOfFile: plistPath, encoding: .utf8)) ?? ""
+        if !contents.contains(executable) {
+            setAutoClean(true)
+        }
+    }
+
     @discardableResult
     static func setAutoClean(_ enable: Bool) -> Bool {
         let fm = FileManager.default
         if enable {
+            guard let executable = Bundle.main.executablePath else { return false }
             try? fm.createDirectory(atPath: (plistPath as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: plistPath) {
+                _ = Shell.run("launchctl", ["unload", plistPath])
+            }
             let content = """
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -30,8 +94,8 @@ enum SystemActions {
                 <string>com.hexmorio.macleaner</string>
                 <key>ProgramArguments</key>
                 <array>
-                    <string>\(home)/.local/bin/clean-storage</string>
-                    <string>--safe</string>
+                    <string>\(executable)</string>
+                    <string>\(AutoClean.argument)</string>
                 </array>
                 <key>StartCalendarInterval</key>
                 <dict>

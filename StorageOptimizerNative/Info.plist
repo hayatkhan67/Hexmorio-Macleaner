@@ -22,10 +22,12 @@
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>HexmorioUpdateRepo</key>
+    <string>hayatkhan67/Hexmorio-Macleaner</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright (c) 2026 Hexmorio. Licensed under the MIT License.</string>
+    <string>Copyright (c) 2026 Hexmorio - http://hexmorio.com/ - Licensed under the MIT License.</string>
     <key>NSDesktopFolderUsageDescription</key>
     <string>Hexmorio Macleaner scans your Desktop for large files, duplicates, and installers to help you reclaim disk space.</string>
     <key>NSDownloadsFolderUsageDescription</key>

@@ -46,6 +46,21 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 220)
         } detail: {
             VStack(spacing: 0) {
+                if let update = state.availableUpdate {
+                    Banner(
+                        icon: "arrow.down.circle.fill", tint: .blue,
+                        text: "Version \(update.version) is available (you have \(Updater.currentVersion)).",
+                        actionTitle: state.isUpdating ? "Updating…" : "Update Now"
+                    ) { Task { await state.installUpdate() } }
+                    .disabled(state.isUpdating)
+                }
+                if !state.hasFullDiskAccess {
+                    Banner(
+                        icon: "lock.shield", tint: .orange,
+                        text: "Grant Full Disk Access once so macOS stops asking for folder permissions and protected folders can be measured.",
+                        actionTitle: "Open Settings"
+                    ) { Permissions.openFullDiskAccessSettings() }
+                }
                 HeaderBar(state: state)
                 Divider()
                 StatCardsRow(state: state)
@@ -55,6 +70,12 @@ struct ContentView: View {
         }
         .frame(minWidth: 900, minHeight: 600)
         .task { await state.rescanAll() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            state.refreshPermissions()
+        }
+        .overlay(alignment: .bottomTrailing) {
+            HexmorioWatermark().padding(10)
+        }
         .overlay(alignment: .bottom) {
             if let toast = state.toast {
                 ToastView(toast: toast)
@@ -102,6 +123,11 @@ private struct HeaderBar: View {
                 Text(state.statusText).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            Toggle("Start at Login", isOn: Binding(
+                get: { state.launchAtLogin },
+                set: { _ in state.toggleLaunchAtLogin() }
+            ))
+            .toggleStyle(.checkbox)
             Button(state.autoCleanEnabled ? "Auto-Clean: On" : "Auto-Clean: Off") {
                 Task { await state.toggleAutoClean() }
             }
@@ -162,6 +188,26 @@ private struct StatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct Banner: View {
+    let icon: String
+    let tint: Color
+    let text: String
+    let actionTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).foregroundStyle(tint)
+            Text(text).font(.callout)
+            Spacer()
+            Button(actionTitle, action: action)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.12))
     }
 }
 

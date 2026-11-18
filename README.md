@@ -1,6 +1,6 @@
 # Hexmorio Macleaner
 
-A macOS disk-space and system-cleanup tool by Hexmorio. It scans developer caches, app
+A macOS disk-space and system-cleanup tool by [Hexmorio](http://hexmorio.com/). It scans developer caches, app
 leftovers, duplicate files, build artifacts, startup items, and more, then
 lets you reclaim space with one click. Ships as two independent
 implementations of the same feature set:
@@ -28,7 +28,8 @@ touch system-critical folders) and the same set of scans.
 - **Startup & Launch Control** - LaunchAgents/LaunchDaemons, enable/disable.
 - **Visual Disk Map** - drill into any folder by size.
 - **Project Builds** - `build/`, `.dart_tool/`, `ios/Pods`, and `node_modules`
-  directories under `~/projects`.
+  directories, auto-detected under common project folders (`~/projects`,
+  `~/Developer`, `~/Code`, `~/dev`, `~/workspace`, `~/Documents/projects`, ...).
 - **App Leftovers** - Application Support data for apps you've uninstalled.
 - **Git Repos** - run `git gc` on repos with bloated `.git` directories.
 - **Duplicates** - full-file-hash duplicate finder.
@@ -40,6 +41,31 @@ touch system-critical folders) and the same set of scans.
   password required.
 - **Weekly auto-clean** - an optional LaunchAgent that runs a safe cleanup
   every Sunday at 3am.
+- **Start at login** (native app only) - on by default once installed in
+  `/Applications`; toggle it from the header or the menu bar.
+- **Built-in updates** (native app only) - checks GitHub Releases daily and
+  updates itself in place (or use *Check for Updates…* in the app menu).
+
+## Installing / updating the native app
+
+Run this in Terminal - it installs the latest release into `/Applications`, or
+updates an existing copy:
+
+```bash
+curl -fsSL https://github.com/hayatkhan67/Hexmorio-Macleaner/releases/latest/download/install.sh | bash
+```
+
+After that, the app keeps itself up to date.
+
+**Already have an older copy?** Versions before the built-in updater can't
+update themselves, so run the command above once. macOS will ask for
+permissions one more time (the new version is signed differently), and then
+never again on later updates.
+
+On first launch, click **Open Settings** on the orange banner and enable
+**Hexmorio Macleaner** under *Full Disk Access*. That one grant stops macOS
+from asking about individual folders. Without it the app skips other apps'
+protected data (Containers, Mail, Photos, ...) instead of triggering prompts.
 
 ## Running the web version
 
@@ -60,25 +86,30 @@ open "dist/Hexmorio Macleaner.app"
 ```
 
 This needs Xcode or the Swift toolchain (`swift build`) and macOS 14+. The
-script produces a double-clickable, ad-hoc-signed `.app` under `dist/` with
-no Python or browser dependency - `swift build -c release` alone also works
-if you just want to run the binary directly.
+script produces a double-clickable `.app` under `dist/` with no Python or
+browser dependency.
 
-To package it as a `.dmg` for distribution:
+`build.sh` signs with your first *Developer ID Application* or *Apple
+Development* certificate (override with `SIGN_IDENTITY="..."`). A stable
+signing identity matters: macOS ties granted permissions to it, so ad-hoc
+builds would make users re-grant permissions after every update.
+
+### Publishing a release
 
 ```bash
-./package-dmg.sh   # after build.sh; outputs dist/Hexmorio Macleaner.dmg
+cd StorageOptimizerNative
+./release.sh 1.1.0 "What changed in this version"
 ```
 
-**[`.github/workflows/build-dmg.yml`](.github/workflows/build-dmg.yml)** does
-this automatically on every push: it builds the app, packages the dmg, and
-uploads it as a workflow artifact. Pushing a tag like `v1.0.0` also attaches
-the dmg to a GitHub Release.
+This bumps the version in `Info.plist`, builds a universal (Apple Silicon +
+Intel) signed app, and publishes `Hexmorio-Macleaner.zip`, a `.dmg`, and
+`install.sh` to GitHub Releases with the `gh` CLI. Installed apps see the new
+version within a day. Always release with the same signing certificate. The
+in-app updater refuses builds signed by anyone else.
 
-The app is only ad-hoc signed (no paid Apple Developer ID), so macOS
-Gatekeeper will flag it as from an unidentified developer on first launch.
-Right-click the app and choose **Open**, or run
-`xattr -cr "Hexmorio Macleaner.app"`, to get past that once.
+The app isn't notarized, so a `.dmg` downloaded in a browser is flagged by
+Gatekeeper on first launch: right-click the app and choose **Open**. The
+`install.sh` command and the in-app updater don't have this problem.
 
 ## Safety
 

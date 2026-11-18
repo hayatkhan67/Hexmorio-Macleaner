@@ -51,7 +51,13 @@ enum LargeFilesScanner {
     static func scan(minMB: Int, maxResults: Int = 50) -> [LargeFile] {
         let fm = FileManager.default
         let home = NSHomeDirectory()
-        let searchDirs = ["\(home)/Downloads", "\(home)/Desktop", "\(home)/Documents", "\(home)/projects"]
+        let allDirs = ["\(home)/Downloads", "\(home)/Desktop", "\(home)/Documents"] + ProjectLocations.roots(fm: fm, home: home)
+        // Drop any dir already covered by a shorter dir earlier in the list
+        // (e.g. "~/Documents/projects" is nested under "~/Documents").
+        var searchDirs: [String] = []
+        for dir in allDirs where !searchDirs.contains(where: { dir == $0 || dir.hasPrefix($0 + "/") }) {
+            searchDirs.append(dir)
+        }
         let minBytes = Int64(minMB) * 1024 * 1024
 
         var results: [LargeFile] = []

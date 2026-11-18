@@ -70,6 +70,25 @@ struct MenuBarQuickActionsView: View {
 
             Divider()
 
+            if let update = state.availableUpdate {
+                Button {
+                    Task { await state.installUpdate() }
+                } label: {
+                    HStack {
+                        if state.isUpdating { ProgressView().controlSize(.small) } else { Image(systemName: "arrow.down.circle.fill") }
+                        Text("Update to \(update.version)")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .disabled(state.isUpdating)
+            }
+
+            Toggle("Start at Login", isOn: Binding(
+                get: { state.launchAtLogin },
+                set: { _ in state.toggleLaunchAtLogin() }
+            ))
+            .toggleStyle(.checkbox)
+
             Button {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "main")
@@ -90,6 +109,9 @@ struct MenuBarQuickActionsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            HexmorioWatermark()
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .buttonStyle(.plain)
         .padding(14)
