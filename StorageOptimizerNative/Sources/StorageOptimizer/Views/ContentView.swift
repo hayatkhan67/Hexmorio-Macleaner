@@ -57,7 +57,7 @@ struct ContentView: View {
                 if !state.hasFullDiskAccess {
                     Banner(
                         icon: "lock.shield", tint: .orange,
-                        text: "Grant Full Disk Access once so macOS stops asking for folder permissions and protected folders can be measured.",
+                        text: "Grant Full Disk Access once so macOS stops asking for folder permissions. Already on? Remove Hexmorio Macleaner from the list with −, add it again, then reopen the app.",
                         actionTitle: "Open Settings"
                     ) { Permissions.openFullDiskAccessSettings() }
                 }

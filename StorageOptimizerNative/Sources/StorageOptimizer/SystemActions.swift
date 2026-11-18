@@ -2,6 +2,12 @@ import Foundation
 import AppKit
 import ServiceManagement
 
+/// Dev builds run from dist/ or .build/ must not take over login items or schedules.
+var isInstalledCopy: Bool {
+    let path = Bundle.main.bundlePath
+    return path.hasPrefix("/Applications/") || path.hasPrefix("\(NSHomeDirectory())/Applications/")
+}
+
 enum LaunchAtLogin {
     private static let didSetDefaultKey = "launchAtLoginDefaultApplied"
 
@@ -25,13 +31,10 @@ enum LaunchAtLogin {
         return (true, enable ? "Will start automatically at login" : "Won't start at login")
     }
 
-    /// Turns launch-at-login on the first time an installed copy runs. Dev builds
-    /// launched from dist/ or .build/ are skipped so they don't become login items.
+    /// Turns launch-at-login on the first time an installed copy runs.
     static func applyDefaultIfNeeded() {
         let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: didSetDefaultKey) else { return }
-        let path = Bundle.main.bundlePath
-        guard path.hasPrefix("/Applications/") || path.hasPrefix("\(NSHomeDirectory())/Applications/") else { return }
+        guard !defaults.bool(forKey: didSetDefaultKey), isInstalledCopy else { return }
         set(true)
         defaults.set(true, forKey: didSetDefaultKey)
     }
@@ -69,7 +72,7 @@ enum SystemActions {
     /// Re-points an existing weekly-clean LaunchAgent at this copy of the app
     /// (older versions pointed it at a script that only existed on one machine).
     static func repairAutoCleanIfNeeded() {
-        guard isAutoCleanEnabled(), let executable = Bundle.main.executablePath else { return }
+        guard isInstalledCopy, isAutoCleanEnabled(), let executable = Bundle.main.executablePath else { return }
         let contents = (try? String(contentsOfFile: plistPath, encoding: .utf8)) ?? ""
         if !contents.contains(executable) {
             setAutoClean(true)

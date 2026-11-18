@@ -102,7 +102,11 @@ final class AppState: ObservableObject {
         let had = hasFullDiskAccess
         hasFullDiskAccess = Permissions.hasFullDiskAccess
         launchAtLogin = LaunchAtLogin.isEnabled
-        if !had && hasFullDiskAccess { Task { await scanLibrary() } }
+        if !had && hasFullDiskAccess {
+            // Sizes measured before the grant skipped protected folders.
+            FolderSizeCache.shared.removeAll()
+            Task { await rescanAll() }
+        }
     }
 
     func toggleLaunchAtLogin() {

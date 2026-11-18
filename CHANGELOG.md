@@ -36,6 +36,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Repeated permission prompts: without Full Disk Access, scans now skip other
   apps' protected data (Containers, Mail, Photos, Contacts, Calendars, ...)
   instead of triggering macOS prompts on every scan.
+- Full Disk Access was never detected on macOS 27, so the banner stayed up and
+  protected folders were skipped even after granting it.
 - Projects weren't detected on Macs that keep them outside `~/projects`.
 - Weekly Auto-Clean pointed at a script that only existed on the developer's
   Mac. It now runs the app itself in a headless `--auto-clean` mode, and

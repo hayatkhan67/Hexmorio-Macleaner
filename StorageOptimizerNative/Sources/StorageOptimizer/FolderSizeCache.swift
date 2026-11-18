@@ -17,6 +17,12 @@ final class FolderSizeCache: @unchecked Sendable {
         ((path as NSString).expandingTildeInPath as NSString).resolvingSymlinksInPath
     }
 
+    func removeAll() {
+        lock.lock(); defer { lock.unlock() }
+        sizes.removeAll()
+        timestamps.removeAll()
+    }
+
     func invalidate(_ path: String) {
         let resolved = resolvedPath(path)
         lock.lock(); defer { lock.unlock() }

@@ -2,12 +2,23 @@ import Foundation
 import AppKit
 
 enum Permissions {
-    /// TCC.db is only readable with Full Disk Access, and probing it never shows a prompt.
+    /// These locations are readable only with Full Disk Access, and probing them never
+    /// shows a prompt. Several are tried because their presence varies by macOS version
+    /// (macOS 27 has no per-user TCC.db at all).
     static var hasFullDiskAccess: Bool {
-        let path = "\(NSHomeDirectory())/Library/Application Support/com.apple.TCC/TCC.db"
-        guard let handle = FileHandle(forReadingAtPath: path) else { return false }
-        try? handle.close()
-        return true
+        let home = NSHomeDirectory()
+        let fileProbes = [
+            "/Library/Application Support/com.apple.TCC/TCC.db",
+            "\(home)/Library/Application Support/com.apple.TCC/TCC.db",
+        ]
+        for path in fileProbes {
+            if let handle = FileHandle(forReadingAtPath: path) {
+                try? handle.close()
+                return true
+            }
+        }
+        let dirProbes = ["Safari", "Mail", "Messages", "Cookies"].map { "\(home)/Library/\($0)" }
+        return dirProbes.contains { (try? FileManager.default.contentsOfDirectory(atPath: $0)) != nil }
     }
 
     // Touching these without Full Disk Access makes macOS show "access data from other apps",
