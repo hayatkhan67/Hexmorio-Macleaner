@@ -36,9 +36,13 @@ enum StartupScanner {
                     }
                 }
 
+                // Items in ~/Library/LaunchAgents, /Library/LaunchAgents, and /Library/LaunchDaemons
+                // are all user- or third-party-managed and can be toggled (system folders use admin prompt).
+                let canToggle = dir.hasPrefix(home) || dir == "/Library/LaunchAgents" || dir == "/Library/LaunchDaemons"
+
                 result.items.append(StartupItem(
                     fileName: fileName, path: fullPath, type: type, label: label, program: program,
-                    isDisabled: isDisabled, canToggle: dir.hasPrefix(home)
+                    isDisabled: isDisabled, canToggle: canToggle
                 ))
             }
         }
@@ -48,24 +52,53 @@ enum StartupScanner {
     @discardableResult
     static func toggle(_ pathStr: String?) -> (success: Bool, message: String) {
         guard let pathStr, !pathStr.isEmpty else { return (false, "Empty path") }
-        guard FileManager.default.fileExists(atPath: pathStr), pathStr.hasPrefix(home) else {
-            return (false, "Permission denied or file not found")
+        guard FileManager.default.fileExists(atPath: pathStr) else {
+            return (false, "Startup file not found")
         }
-        let path = pathStr as NSString
-        do {
-            if path.pathExtension == "disabled" || pathStr.hasSuffix(".disabled") {
-                let newPath = String(pathStr.dropLast(".disabled".count))
-                try FileManager.default.moveItem(atPath: pathStr, toPath: newPath)
-                _ = Shell.run("launchctl", ["load", newPath])
-                return (true, "Enabled startup item")
-            } else {
-                _ = Shell.run("launchctl", ["unload", pathStr])
-                let newPath = pathStr + ".disabled"
-                try FileManager.default.moveItem(atPath: pathStr, toPath: newPath)
-                return (true, "Disabled startup item")
+
+        let isDisable = !pathStr.hasSuffix(".disabled")
+        let targetPath = isDisable ? (pathStr + ".disabled") : String(pathStr.dropLast(".disabled".count))
+
+        // 1. User LaunchAgents (~/Library/LaunchAgents): no admin password needed
+        if pathStr.hasPrefix(home) {
+            do {
+                if isDisable {
+                    _ = Shell.run("launchctl", ["unload", pathStr])
+                    try FileManager.default.moveItem(atPath: pathStr, toPath: targetPath)
+                    return (true, "Disabled startup item")
+                } else {
+                    try FileManager.default.moveItem(atPath: pathStr, toPath: targetPath)
+                    _ = Shell.run("launchctl", ["load", targetPath])
+                    return (true, "Enabled startup item")
+                }
+            } catch {
+                return (false, error.localizedDescription)
             }
-        } catch {
-            return (false, error.localizedDescription)
         }
+
+        // 2. System LaunchAgents & LaunchDaemons (/Library/LaunchAgents, /Library/LaunchDaemons):
+        // Require administrator authorization via native macOS prompt.
+        guard pathStr.hasPrefix("/Library/LaunchAgents/") || pathStr.hasPrefix("/Library/LaunchDaemons/") else {
+            return (false, "Cannot modify Apple-protected SIP startup items")
+        }
+
+        let isDaemon = pathStr.hasPrefix("/Library/LaunchDaemons/")
+        let uid = getuid()
+        let domain = isDaemon ? "system" : "gui/\(uid)"
+        let qSrc = pathStr.replacingOccurrences(of: "'", with: "'\\''")
+        let qDst = targetPath.replacingOccurrences(of: "'", with: "'\\''")
+
+        let cmd: String
+        if isDisable {
+            cmd = "launchctl bootout \(domain) '\(qSrc)' 2>/dev/null || launchctl unload '\(qSrc)' 2>/dev/null || true; mv '\(qSrc)' '\(qDst)'"
+        } else {
+            cmd = "mv '\(qSrc)' '\(qDst)' && (launchctl bootstrap \(domain) '\(qDst)' 2>/dev/null || launchctl load '\(qDst)' 2>/dev/null || true)"
+        }
+
+        let res = Shell.runAsAdmin(cmd)
+        if res.ok {
+            return (true, isDisable ? "Disabled system startup item" : "Enabled system startup item")
+        }
+        return (false, res.stderr.isEmpty ? "Administrator authorization cancelled or failed" : res.stderr)
     }
 }

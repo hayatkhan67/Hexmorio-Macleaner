@@ -57,8 +57,11 @@ private struct LibraryCard: View {
                     .buttonStyle(.bordered)
                 if item.canClean {
                     Button {
-                        state.confirm(title: "Purge contents of \(item.name)?", message: item.path) {
-                            Task { await state.cleanLibraryFolder(item.path, item.name) }
+                        let note = item.trashOnClean
+                            ? "Contents will be moved to the Trash."
+                            : "Contents will be permanently deleted."
+                        state.confirm(title: "Purge contents of \(item.name)?", message: "\(item.path)\n\n\(note)") {
+                            Task { await state.cleanLibraryFolder(item.path, item.name, toTrash: item.trashOnClean) }
                         }
                     } label: {
                         Label("Purge", systemImage: "trash")

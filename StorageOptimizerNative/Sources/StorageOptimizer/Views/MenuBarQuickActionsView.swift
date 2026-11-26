@@ -90,12 +90,22 @@ struct MenuBarQuickActionsView: View {
             .toggleStyle(.checkbox)
 
             Button {
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "main")
+                openMainWindow()
             } label: {
                 HStack {
                     Image(systemName: "macwindow")
                     Text("Open Hexmorio Macleaner")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button {
+                openMainWindow()
+                state.showWhatsNew = true
+            } label: {
+                HStack {
+                    Image(systemName: "newspaper")
+                    Text("What's New")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -119,6 +129,17 @@ struct MenuBarQuickActionsView: View {
         .task {
             if state.targets.isEmpty { await state.scanTargets() }
             if state.disk.total == "--" { await state.refreshDiskAndRam() }
+        }
+    }
+
+    private func openMainWindow() {
+        NSApp.setActivationPolicy(.regular)
+        openWindow(id: "main")
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            for window in NSApp.windows where window.styleMask.contains(.titled) && !(window is NSPanel) {
+                window.makeKeyAndOrderFront(nil)
+            }
         }
     }
 

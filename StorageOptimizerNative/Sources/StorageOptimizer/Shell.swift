@@ -1,6 +1,16 @@
 import Foundation
 
 enum Shell {
+    /// Lock-guarded stdout/stderr storage shared with the pipe reader threads.
+    private final class PipeBuffers: @unchecked Sendable {
+        private let lock = NSLock()
+        private var out = Data()
+        private var err = Data()
+        func set(out data: Data) { lock.lock(); out = data; lock.unlock() }
+        func set(err data: Data) { lock.lock(); err = data; lock.unlock() }
+        func snapshot() -> (Data, Data) { lock.lock(); defer { lock.unlock() }; return (out, err) }
+    }
+
     struct Result {
         let status: Int32
         let stdout: String
@@ -35,8 +45,8 @@ enum Shell {
     }
 
     /// Runs an external tool synchronously (blocking the calling thread/task).
-    /// Callers must invoke this off the main actor - every scanner function in
-    /// this app runs inside `Task.detached` for exactly that reason.
+    /// Drains stdout and stderr concurrently while the process runs so a child
+    /// writing >64KB to either pipe never deadlocks waiting for the buffer to drain.
     @discardableResult
     static func run(_ executable: String, _ args: [String] = [], timeout: TimeInterval = 5) -> Result {
         let process = Process()
@@ -63,17 +73,42 @@ enum Shell {
             return Result(status: -1, stdout: "", stderr: "\(error)")
         }
 
-        if sem.wait(timeout: .now() + timeout) == .timedOut {
-            process.terminate()
-            return Result(status: -1, stdout: "", stderr: "timeout")
+        // The reader threads may still be running if we stop waiting early, so the
+        // buffers live behind a lock instead of being shared mutable locals.
+        let buffers = PipeBuffers()
+        let drainGroup = DispatchGroup()
+
+        drainGroup.enter()
+        DispatchQueue.global(qos: .utility).async {
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+            buffers.set(out: data)
+            drainGroup.leave()
         }
 
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+        drainGroup.enter()
+        DispatchQueue.global(qos: .utility).async {
+            let data = errPipe.fileHandleForReading.readDataToEndOfFile()
+            buffers.set(err: data)
+            drainGroup.leave()
+        }
+
+        if sem.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            _ = drainGroup.wait(timeout: .now() + 0.5)
+            let (out, _) = buffers.snapshot()
+            return Result(
+                status: -1,
+                stdout: String(data: out, encoding: .utf8) ?? "",
+                stderr: "timeout"
+            )
+        }
+
+        _ = drainGroup.wait(timeout: .now() + 2)
+        let (out, err) = buffers.snapshot()
         return Result(
             status: process.terminationStatus,
-            stdout: String(data: outData, encoding: .utf8) ?? "",
-            stderr: String(data: errData, encoding: .utf8) ?? ""
+            stdout: String(data: out, encoding: .utf8) ?? "",
+            stderr: String(data: err, encoding: .utf8) ?? ""
         )
     }
 

@@ -87,15 +87,88 @@ final class AppState: ObservableObject {
     @Published var availableUpdate: AvailableUpdate?
     @Published var isUpdating = false
 
+    /// Shows the What's New sheet: once after each update, or from the menus.
+    @Published var showWhatsNew = false
+
+    func dismissWhatsNew() {
+        WhatsNew.markSeen()
+        showWhatsNew = false
+    }
+
+    // Background storage & build monitoring state
+    private var lastScannedFreeBytes: UInt64 = 0
+    private var lastFullScanDate: Date = .distantPast
+    private var isAutoScanning = false
+    private var hasShownLowDiskWarning = false
+
+    /// Significant disk space shift threshold (250 MB) that triggers an automatic background rescan.
+    private let diskDeltaThresholdBytes: UInt64 = 250 * 1024 * 1024
+    /// Periodic fallback rescan interval (10 minutes) while the app is running.
+    private let periodicRescanInterval: TimeInterval = 10 * 60
+    /// Minimum gap between disk-delta-triggered rescans (3 minutes).
+    private let minAutoRescanInterval: TimeInterval = 3 * 60
+
     init() {
         Task { await startup() }
     }
 
     private func startup() async {
+        if WhatsNew.shouldShowOnLaunch { showWhatsNew = true }
         LaunchAtLogin.applyDefaultIfNeeded()
         launchAtLogin = LaunchAtLogin.isEnabled
         await Task.detached { SystemActions.repairAutoCleanIfNeeded() }.value
+        startBackgroundMonitor()
         if Updater.isCheckDue { await checkForUpdates(userInitiated: false) }
+    }
+
+    /// Lightweight background loop that checks kernel `statvfs` disk stats every 30s
+    /// (zero file-system traversal overhead) and triggers a background project/cache
+    /// rescan whenever free storage changes by >= 250 MB or 10 minutes have elapsed.
+    private func startBackgroundMonitor() {
+        Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000) // 30 seconds
+                guard let self else { break }
+                await self.checkStorageDeltaAndAutoScan()
+            }
+        }
+    }
+
+    func checkStorageDeltaAndAutoScan() async {
+        await refreshDiskAndRam()
+
+        // Warn once per session if disk usage reaches >= 90%
+        if disk.percentUsed >= 90 && !hasShownLowDiskWarning && disk.totalBytes > 0 {
+            hasShownLowDiskWarning = true
+            let buildsTotal = projects.reduce(0) { $0 + $1.sizeBytes }
+            let reclaimable = safeTotalBytes + buildsTotal
+            if reclaimable > 0 {
+                showToast("Low disk space (\(disk.free) free). \(formatBytes(reclaimable)) reclaimable in caches & builds!", isError: true)
+            }
+        }
+
+        guard !isAutoScanning && !isScanningProjects && !isScanningTargets else { return }
+
+        let currentFree = disk.freeBytes
+        let delta: UInt64 = currentFree > lastScannedFreeBytes
+            ? currentFree - lastScannedFreeBytes
+            : lastScannedFreeBytes - currentFree
+        let elapsed = Date().timeIntervalSince(lastFullScanDate)
+
+        // A running Xcode/Gradle build can move free space by 250 MB every 30s; without
+        // the cooldown we'd re-walk all of ~ back-to-back and fight the build for disk I/O.
+        let deltaTriggered = lastScannedFreeBytes > 0 && delta >= diskDeltaThresholdBytes
+            && elapsed >= minAutoRescanInterval
+        if deltaTriggered || elapsed >= periodicRescanInterval {
+            isAutoScanning = true
+            FolderSizeCache.shared.removeAll()
+            async let p: Void = scanProjects()
+            async let t: Void = scanTargets()
+            _ = await (p, t)
+            lastScannedFreeBytes = disk.freeBytes
+            lastFullScanDate = Date()
+            isAutoScanning = false
+        }
     }
 
     func refreshPermissions() {
@@ -105,7 +178,10 @@ final class AppState: ObservableObject {
         if !had && hasFullDiskAccess {
             // Sizes measured before the grant skipped protected folders.
             FolderSizeCache.shared.removeAll()
-            Task { await rescanAll() }
+            Task { await rescanAll(clearCache: true) }
+        } else {
+            // Also check if storage shifted while the user was working in an IDE/Xcode
+            Task { await checkStorageDeltaAndAutoScan() }
         }
     }
 
@@ -182,23 +258,38 @@ final class AppState: ObservableObject {
 
     func cleanTargets(ids: [String]) async {
         statusText = "Cleaning \(ids.count) item(s)..."
-        for id in ids {
-            let needsAdmin = CleanTargetsService.needsAdmin(id)
-            _ = await Task.detached { CleanTargetsService.execute(id, asAdmin: needsAdmin) }.value
-        }
+        let result = await Task.detached { CleanTargetsService.executeBatch(ids) }.value
         selectedIds.subtract(ids)
-        showToast("Cleaned \(ids.count) item(s) successfully!")
+        if result.success {
+            showToast("Cleaned \(ids.count) item(s) successfully!")
+        } else {
+            showToast(result.message, isError: true)
+        }
         statusText = "Ready"
-        await rescanAll()
+        await rescanAll(clearCache: true)
     }
 
-    func rescanAll() async {
+    func rescanAll(clearCache: Bool = true) async {
         statusText = "Deep Scanning..."
+        if clearCache {
+            FolderSizeCache.shared.removeAll()
+        }
         async let t: Void = scanTargets()
         async let l: Void = scanLibrary()
         async let p: Void = scanProjects()
         async let d: Void = refreshDiskAndRam()
         _ = await (t, l, p, d)
+
+        // Also refresh any secondary tab data that was already loaded
+        if !gitRepos.isEmpty { await scanGitRepos() }
+        if !leftovers.isEmpty { await scanLeftovers() }
+        if !largeFiles.isEmpty { await loadLargeFiles() }
+        if !installers.isEmpty { await scanInstallers() }
+        if !duplicates.isEmpty { await scanDuplicates() }
+        if !diskMapPath.isEmpty { await loadDiskMap(diskMapPath) }
+
+        lastScannedFreeBytes = disk.freeBytes
+        lastFullScanDate = Date()
         autoCleanEnabled = await Task.detached { SystemActions.isAutoCleanEnabled() }.value
         statusText = "Ready"
     }
@@ -223,11 +314,13 @@ final class AppState: ObservableObject {
         return items.sorted { $0.sizeBytes > $1.sizeBytes }
     }
 
-    func cleanLibraryFolder(_ path: String, _ name: String) async {
+    func cleanLibraryFolder(_ path: String, _ name: String, toTrash: Bool = false) async {
         statusText = "Purging \(name)..."
-        let (ok, msg) = await Task.detached { SafeDelete.cleanFolderContents(path) }.value
+        let (ok, msg) = await Task.detached {
+            toTrash ? SafeDelete.trashFolderContents(path) : SafeDelete.cleanFolderContents(path)
+        }.value
         if ok {
-            showToast("Purged \(name) contents successfully!")
+            showToast(toTrash ? "Moved \(name) contents to Trash" : "Purged \(name) contents successfully!")
             await scanLibrary()
             await refreshDiskAndRam()
         } else {
@@ -245,6 +338,26 @@ final class AppState: ObservableObject {
         isScanningApps = false
     }
 
+    func uninstallApp(_ path: String, _ name: String) async {
+        statusText = "Moving \(name) to Trash..."
+        let (ok, msg) = await Task.detached { () -> (Bool, String) in
+            do {
+                try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
+                return (true, "Moved \(name) to Trash")
+            } catch {
+                let q = path.replacingOccurrences(of: "'", with: "'\\''")
+                let res = Shell.runAsAdmin("mv '\(q)' \"\(NSHomeDirectory())/.Trash/\"")
+                return res.ok ? (true, "Moved \(name) to Trash") : (false, error.localizedDescription)
+            }
+        }.value
+        showToast(msg, isError: !ok)
+        statusText = "Ready"
+        if ok {
+            await scanApps()
+            await refreshDiskAndRam()
+        }
+    }
+
     // MARK: - Packages
 
     func scanPackages() async {
@@ -252,6 +365,24 @@ final class AppState: ObservableObject {
         let result = await Task.detached { PackagesScanner.scan() }.value
         packages = result
         isScanningPackages = false
+    }
+
+    func uninstallBrewPackage(_ name: String) async {
+        statusText = "Uninstalling \(name)..."
+        let res = await Task.detached { Shell.run("brew", ["uninstall", name], timeout: 60) }.value
+        showToast(res.ok ? "Uninstalled \(name)" : "Failed: \(res.stderr)", isError: !res.ok)
+        statusText = "Ready"
+        await scanPackages()
+        await refreshDiskAndRam()
+    }
+
+    func uninstallNpmPackage(_ name: String) async {
+        statusText = "Uninstalling \(name)..."
+        let res = await Task.detached { Shell.run("npm", ["uninstall", "-g", name], timeout: 30) }.value
+        showToast(res.ok ? "Uninstalled \(name)" : "Failed: \(res.stderr)", isError: !res.ok)
+        statusText = "Ready"
+        await scanPackages()
+        await refreshDiskAndRam()
     }
 
     func runBrewCleanup() async {
@@ -315,7 +446,7 @@ final class AppState: ObservableObject {
     }
 
     func cleanAllProjectBuilds() async {
-        let builds = projects.filter { $0.type == "build" || $0.type == ".dart_tool" || $0.type == "node_modules" }
+        let builds = projects
         guard !builds.isEmpty else { showToast("No build directories to clean."); return }
         statusText = "Cleaning all project builds..."
         var count = 0

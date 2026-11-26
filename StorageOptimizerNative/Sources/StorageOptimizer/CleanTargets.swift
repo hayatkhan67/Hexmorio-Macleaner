@@ -13,9 +13,15 @@ enum CleanTargetsCatalog {
         CleanTargetDef(id: "xcode_archives", category: "developer", name: "Xcode App Archives",
             path: "\(home)/Library/Developer/Xcode/Archives",
             description: "Historical build archives produced when exporting or distributing apps.", safety: .review, action: .deleteContents),
-        CleanTargetDef(id: "simulators_cache", category: "developer", name: "iOS Simulators State & Caches",
-            path: "\(home)/Library/Developer/CoreSimulator/Caches",
-            description: "Temporary runtimes and cached simulator container states.", safety: .safe, action: .simErase),
+        CleanTargetDef(id: "simulators_cache", category: "developer", name: "iOS Simulators Devices & Caches",
+            path: "\(home)/Library/Developer/CoreSimulator/Devices",
+            description: "Simulator device container data, installed test apps, and cached runtime states.", safety: .safe, action: .simErase),
+        CleanTargetDef(id: "xcode_doc_cache", category: "developer", name: "Xcode Documentation Cache",
+            path: "\(home)/Library/Developer/Xcode/DocumentationCache",
+            description: "Downloaded Apple developer documentation indexes and offline caches.", safety: .safe, action: .deleteContents),
+        CleanTargetDef(id: "gradle_wrapper", category: "developer", name: "Gradle Wrapper Distributions",
+            path: "\(home)/.gradle/wrapper/dists",
+            description: "Downloaded Gradle distribution versions (automatically re-downloaded when needed).", safety: .rebuildable, action: .deleteContents),
         CleanTargetDef(id: "dart_server", category: "developer", name: "Dart Analysis Server Cache",
             path: "\(home)/.dartServer",
             description: "Persistent code analysis indexes from Flutter and Dart LSP.", safety: .safe, action: .recreateDir),
@@ -111,10 +117,10 @@ enum CleanTargetsCatalog {
             description: "Temporary Chrome profiles created during browser automation.", safety: .safe, action: .deleteContents),
         CleanTargetDef(id: "system_library_caches", category: "system", name: "System /Library/Caches",
             path: "/Library/Caches",
-            description: "Root system application caches and helper data.", safety: .safe, action: .deleteContents),
+            description: "Root system application caches and helper data (requires admin password).", safety: .review, action: .deleteContents),
         CleanTargetDef(id: "system_library_logs", category: "system", name: "System /Library/Logs",
             path: "/Library/Logs",
-            description: "Historical macOS daemon and system diagnostic logs.", safety: .safe, action: .deleteContents),
+            description: "Historical macOS daemon and system diagnostic logs (requires admin password).", safety: .review, action: .deleteContents),
     ]
 }
 
@@ -149,6 +155,44 @@ enum CleanTargetsService {
         id == "system_library_caches" || id == "system_library_logs"
     }
 
+    /// Executes a batch of targets in one go so if multiple admin targets are
+    /// selected, macOS only prompts for the administrator password ONCE instead
+    /// of once per target.
+    static func executeBatch(_ targetIds: [String]) -> (success: Bool, message: String) {
+        let adminIds = targetIds.filter { needsAdmin($0) }
+        let userIds = targetIds.filter { !needsAdmin($0) }
+
+        var lastMessage = "Cleaned successfully"
+        var allOk = true
+
+        for id in userIds {
+            let res = execute(id, asAdmin: false)
+            if !res.success {
+                allOk = false
+                lastMessage = res.message
+            }
+        }
+
+        if !adminIds.isEmpty {
+            let adminDefs = adminIds.compactMap { id in CleanTargetsCatalog.all.first(where: { $0.id == id }) }
+            if !adminDefs.isEmpty {
+                let cmds = adminDefs.map { def -> String in
+                    let quoted = def.path.replacingOccurrences(of: "'", with: "'\\''")
+                    return "rm -rf '\(quoted)'/* '\(quoted)'/.[!.]* 2>/dev/null"
+                }.joined(separator: "; ")
+                let result = Shell.runAsAdmin("\(cmds); exit 0")
+                for def in adminDefs {
+                    FolderSizeCache.shared.invalidate(def.path)
+                }
+                if result.status != 0 {
+                    allOk = false
+                    lastMessage = result.stderr.isEmpty ? "Admin cleanup cancelled or failed" : result.stderr
+                }
+            }
+        }
+        return (allOk, lastMessage)
+    }
+
     @discardableResult
     static func execute(_ targetId: String, asAdmin: Bool = false) -> (success: Bool, message: String) {
         guard let def = CleanTargetsCatalog.all.first(where: { $0.id == targetId }) else {
@@ -168,13 +212,27 @@ enum CleanTargetsService {
             return (false, result.stderr.isEmpty ? "Admin cleanup failed" : result.stderr)
         }
 
+        let hasFDA = Permissions.hasFullDiskAccess
         var failures: [String] = []
         func purgeContents(_ path: String) {
             guard let items = try? fm.contentsOfDirectory(atPath: path) else { return }
             for name in items {
                 let itemPath = (path as NSString).appendingPathComponent(name)
+                // Without Full Disk Access, touching com.apple.* TCC-protected cache/log subfolders
+                // (e.g. CloudKit, Safari, FamilyCircle, HomeKit, Spotlight) triggers repeated macOS
+                // "access data from other apps" prompts on every clean. Skip them cleanly.
+                if !hasFDA && Permissions.isProtectedOrAppleCache(name: name, fullPath: itemPath) {
+                    continue
+                }
                 do { try fm.removeItem(atPath: itemPath) }
-                catch { failures.append("\(name): \(error.localizedDescription)") }
+                catch {
+                    // Ignore EPERM / operation not permitted on system-locked cache entries
+                    let nsErr = error as NSError
+                    if nsErr.domain == NSCocoaErrorDomain && (nsErr.code == NSFileWriteNoPermissionError || nsErr.code == 513) {
+                        continue
+                    }
+                    failures.append("\(name): \(error.localizedDescription)")
+                }
             }
         }
 
@@ -190,9 +248,10 @@ enum CleanTargetsService {
         case .pubClean:
             _ = Shell.run("dart", ["pub", "cache", "clean", "-f"], timeout: 15)
         case .simErase:
-            _ = Shell.run("xcrun", ["simctl", "erase", "all"], timeout: 15)
-            _ = Shell.run("xcrun", ["simctl", "delete", "unavailable"], timeout: 10)
-            if fm.fileExists(atPath: def.path) { purgeContents(def.path) }
+            _ = Shell.run("xcrun", ["simctl", "erase", "all"], timeout: 20)
+            _ = Shell.run("xcrun", ["simctl", "delete", "unavailable"], timeout: 15)
+            let simCaches = "\(CleanTargetsCatalog.home)/Library/Developer/CoreSimulator/Caches"
+            if fm.fileExists(atPath: simCaches) { purgeContents(simCaches) }
         case .emptyTrash:
             if fm.fileExists(atPath: def.path) { purgeContents(def.path) }
         }

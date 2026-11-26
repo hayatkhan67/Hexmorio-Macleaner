@@ -84,6 +84,9 @@ struct ContentView: View {
                     .animation(.spring, value: state.toast)
             }
         }
+        .sheet(isPresented: $state.showWhatsNew, onDismiss: { WhatsNew.markSeen() }) {
+            WhatsNewView { state.dismissWhatsNew() }
+        }
         .alert(item: $state.pendingAction) { action in
             Alert(
                 title: Text(action.title),

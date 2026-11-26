@@ -53,6 +53,9 @@ npm-debug.log*
 # Logs
 *.log
 
+# AI working notes (local only: contain local paths and project names)
+docs/ai/
+
 # Editors / IDEs
 .vscode/
 .idea/

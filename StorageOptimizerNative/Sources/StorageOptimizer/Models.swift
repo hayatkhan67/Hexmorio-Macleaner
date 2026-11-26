@@ -69,6 +69,9 @@ struct LibraryItem: Identifiable {
     var sizeBytes: Int64
     let description: String
     let canClean: Bool
+    /// When true, "Purge" moves the folder's contents to the Trash instead of
+    /// deleting them permanently (used for folders that may hold real user data).
+    var trashOnClean: Bool = false
     var sizeFormatted: String { formatBytes(sizeBytes) }
 }
 

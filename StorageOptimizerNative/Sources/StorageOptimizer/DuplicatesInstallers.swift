@@ -8,23 +8,55 @@ struct DuplicatesScanResult {
 }
 
 enum DuplicatesScanner {
+    private static let skippedDirs: Set<String> = ProjectLocations.skippedDirectoryNames.union([
+        "node_modules", "Pods", ".git", "build", ".build", ".dart_tool",
+        ".next", ".nuxt", ".gradle", "DerivedData", "target", ".venv", "venv"
+    ])
+
+    private static let maxDepth = 4
+
     static func scan() -> DuplicatesScanResult {
         let fm = FileManager.default
         let home = NSHomeDirectory()
-        let searchDirs = ["\(home)/Downloads", "\(home)/Desktop"]
+        let searchDirs = ["\(home)/Downloads", "\(home)/Desktop", "\(home)/Documents"]
 
         var sizeMap: [Int64: [(path: String, mtime: Date)]] = [:]
         for dir in searchDirs {
-            guard let entries = try? fm.contentsOfDirectory(atPath: dir) else { continue }
-            for name in entries where !name.hasPrefix(".") {
-                let full = (dir as NSString).appendingPathComponent(name)
-                var isDir: ObjCBool = false
-                guard fm.fileExists(atPath: full, isDirectory: &isDir), !isDir.boolValue else { continue }
-                guard let attrs = try? fm.attributesOfItem(atPath: full) else { continue }
-                let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
-                guard size > 1024 else { continue }
-                let mtime = (attrs[.modificationDate] as? Date) ?? .distantPast
-                sizeMap[size, default: []].append((full, mtime))
+            let rootDepth = dir.split(separator: "/").count
+            guard let enumerator = fm.enumerator(
+                at: URL(fileURLWithPath: dir),
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .fileSizeKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else { continue }
+
+            while true {
+                var finished = false
+                autoreleasepool {
+                    guard let nextObj = enumerator.nextObject() else {
+                        finished = true
+                        return
+                    }
+                    guard let url = nextObj as? URL else { return }
+                    let name = url.lastPathComponent
+                    guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .fileSizeKey, .contentModificationDateKey]) else { return }
+
+                    if values.isSymbolicLink == true {
+                        if values.isDirectory == true { enumerator.skipDescendants() }
+                        return
+                    }
+                    if values.isDirectory == true {
+                        let depth = url.path.split(separator: "/").count - rootDepth
+                        if depth >= maxDepth || skippedDirs.contains(name) || values.isPackage == true {
+                            enumerator.skipDescendants()
+                        }
+                        return
+                    }
+                    let size = Int64(values.fileSize ?? 0)
+                    guard size > 10 * 1024 else { return } // Ignore tiny <10KB files
+                    let mtime = values.contentModificationDate ?? .distantPast
+                    sizeMap[size, default: []].append((url.path, mtime))
+                }
+                if finished { break }
             }
         }
 
@@ -55,9 +87,16 @@ enum DuplicatesScanner {
         defer { try? handle.close() }
         var hasher = SHA256()
         while true {
-            let chunk = handle.readData(ofLength: 1024 * 1024)
-            if chunk.isEmpty { break }
-            hasher.update(data: chunk)
+            var done = false
+            autoreleasepool {
+                let chunk = handle.readData(ofLength: 1024 * 1024)
+                if chunk.isEmpty {
+                    done = true
+                } else {
+                    hasher.update(data: chunk)
+                }
+            }
+            if done { break }
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
@@ -70,25 +109,68 @@ struct InstallersScanResult {
 }
 
 enum InstallersScanner {
-    static let extensions: Set<String> = ["dmg", "pkg", "apk", "iso", "zip", "tar.gz", "tgz"]
+    static let extensions: Set<String> = ["dmg", "pkg", "apk", "ipa", "aab", "iso", "zip", "tar.gz", "tgz", "xip"]
+
+    private static let skippedDirs: Set<String> = ProjectLocations.skippedDirectoryNames.union([
+        "node_modules", "Pods", ".git", ".dart_tool", ".next", ".nuxt",
+        ".gradle", "DerivedData", "target", ".venv", "venv"
+    ])
+
+    private static let maxDepth = 5
 
     static func scan() -> InstallersScanResult {
         let fm = FileManager.default
         let home = NSHomeDirectory()
+        let hasFDA = Permissions.hasFullDiskAccess
         var result = InstallersScanResult()
+        var seen = Set<String>()
 
-        for dir in ["\(home)/Downloads", "\(home)/Desktop"] {
-            guard let entries = try? fm.contentsOfDirectory(atPath: dir) else { continue }
-            for name in entries where !name.hasPrefix(".") {
-                let ext = (name as NSString).pathExtension.lowercased()
-                let isTarGz = name.lowercased().hasSuffix(".tar.gz")
-                guard extensions.contains(ext) || isTarGz else { continue }
-                let full = (dir as NSString).appendingPathComponent(name)
-                guard let attrs = try? fm.attributesOfItem(atPath: full) else { continue }
-                let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
-                guard size >= 10 * 1024 * 1024 else { continue }
-                result.totalBytes += size
-                result.installers.append(InstallerFile(name: name, path: full, sizeBytes: size))
+        for root in ProjectLocations.searchRoots(fm: fm, home: home) {
+            let rootDepth = root.split(separator: "/").count
+            guard let enumerator = fm.enumerator(
+                at: URL(fileURLWithPath: root),
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .totalFileAllocatedSizeKey, .fileSizeKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else { continue }
+
+            while true {
+                var finished = false
+                autoreleasepool {
+                    guard let nextObj = enumerator.nextObject() else {
+                        finished = true
+                        return
+                    }
+                    guard let url = nextObj as? URL else { return }
+                    let name = url.lastPathComponent
+                    guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .totalFileAllocatedSizeKey, .fileSizeKey]) else { return }
+
+                    if values.isSymbolicLink == true {
+                        if values.isDirectory == true { enumerator.skipDescendants() }
+                        return
+                    }
+                    if values.isDirectory == true {
+                        let depth = url.path.split(separator: "/").count - rootDepth
+                        if depth >= maxDepth || skippedDirs.contains(name) ||
+                           values.isPackage == true || name.hasSuffix(".app") ||
+                           (!hasFDA && Permissions.isProtected(url.path)) {
+                            enumerator.skipDescendants()
+                        }
+                        return
+                    }
+
+                    let lower = name.lowercased()
+                    let ext = (lower as NSString).pathExtension
+                    let isTarGz = lower.hasSuffix(".tar.gz")
+                    guard extensions.contains(ext) || isTarGz else { return }
+
+                    let size = Int64(values.totalFileAllocatedSize ?? values.fileSize ?? 0)
+                    guard size >= 10 * 1024 * 1024 else { return }
+                    guard seen.insert(url.path).inserted else { return }
+
+                    result.totalBytes += size
+                    result.installers.append(InstallerFile(name: name, path: url.path, sizeBytes: size))
+                }
+                if finished { break }
             }
         }
         result.installers.sort { $0.sizeBytes > $1.sizeBytes }

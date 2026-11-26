@@ -26,9 +26,19 @@ struct AppsView: View {
                     TableColumn("Size") { app in Text(app.sizeFormatted) }.width(90)
                     TableColumn("Path") { app in Text(app.path).lineLimit(1).truncationMode(.middle) }
                     TableColumn("") { app in
-                        Button { state.revealInFinder(app.path) } label: { Image(systemName: "folder") }
+                        HStack {
+                            Button { state.revealInFinder(app.path) } label: { Image(systemName: "folder") }
+                                .buttonStyle(.plain)
+                            Button {
+                                state.confirm(title: "Move \(app.name) to Trash?", message: app.path) {
+                                    Task { await state.uninstallApp(app.path, app.name) }
+                                }
+                            } label: {
+                                Image(systemName: "trash").foregroundStyle(.red)
+                            }
                             .buttonStyle(.plain)
-                    }.width(40)
+                        }
+                    }.width(80)
                 }
             }
         }
@@ -56,10 +66,30 @@ struct PackagesView: View {
             } else if let pkgs = state.packages {
                 HSplitView {
                     List(pkgs.brew) { b in
-                        HStack { Text(b.name); Spacer(); Text(b.sizeFormatted).foregroundStyle(.green) }
+                        HStack {
+                            Text(b.name)
+                            Spacer()
+                            Text(b.sizeFormatted).foregroundStyle(.green)
+                            Button {
+                                state.confirm(title: "Uninstall Homebrew package '\(b.name)'?", message: b.path) {
+                                    Task { await state.uninstallBrewPackage(b.name) }
+                                }
+                            } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                            .buttonStyle(.plain)
+                        }
                     }
                     List(pkgs.npm) { n in
-                        HStack { Text(n.name); Spacer(); Text(n.version).foregroundStyle(.secondary) }
+                        HStack {
+                            Text(n.name)
+                            Spacer()
+                            Text(n.version).foregroundStyle(.secondary)
+                            Button {
+                                state.confirm(title: "Uninstall global npm package '\(n.name)'?", message: "Runs: npm uninstall -g \(n.name)") {
+                                    Task { await state.uninstallNpmPackage(n.name) }
+                                }
+                            } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                            .buttonStyle(.plain)
+                        }
                     }
                     List(pkgs.pip) { p in
                         HStack { Text(p.name); Spacer(); Text(p.version).foregroundStyle(.secondary) }

@@ -110,6 +110,7 @@ enum LibraryScanner {
 
         // 1. ~/Library subfolders
         let libPath = "\(home)/Library"
+        let cleanableUserLib: Set<String> = ["Caches", "Logs", "HTTPStorages", "Saved Application State"]
         for name in listDirs(libPath) where !name.hasPrefix(".") {
             let full = (libPath as NSString).appendingPathComponent(name)
             var isDir: ObjCBool = false
@@ -120,14 +121,14 @@ enum LibraryScanner {
             result.userLibrary.append(LibraryItem(
                 name: name, path: full, category: "user_library", sizeBytes: size,
                 description: FolderDescriptions.describe(category: "user_library", name: name),
-                canClean: ["Caches", "Logs", "HTTPStorages"].contains(name)
+                canClean: cleanableUserLib.contains(name)
             ))
         }
         result.userLibrary.sort { $0.sizeBytes > $1.sizeBytes }
 
         // 2. Application Support
         let appSupPath = "\(home)/Library/Application Support"
-        for name in listDirs(appSupPath) where !name.hasPrefix(".") {
+        for name in listDirs(appSupPath) where !name.hasPrefix(".") && !name.hasPrefix("com.apple.") {
             let full = (appSupPath as NSString).appendingPathComponent(name)
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: full, isDirectory: &isDir), isDir.boolValue else { continue }
@@ -137,7 +138,10 @@ enum LibraryScanner {
             result.appSupport.append(LibraryItem(
                 name: name, path: full, category: "app_support", sizeBytes: size,
                 description: FolderDescriptions.describe(category: "app_support", name: name),
-                canClean: false
+                // Application Support holds real app data (databases, message history,
+                // vaults), so purging it is recoverable: contents go to the Trash.
+                canClean: true,
+                trashOnClean: true
             ))
         }
         result.appSupport.sort { $0.sizeBytes > $1.sizeBytes }
@@ -159,7 +163,18 @@ enum LibraryScanner {
         }
         result.userCaches.sort { $0.sizeBytes > $1.sizeBytes }
 
-        // 4. Hidden dot folders in HOME
+        // 4. Hidden dot folders in HOME (tools, SDKs, package managers, and CLI state)
+        // Credentials, keys and tool config: listed for visibility, never purgeable.
+        let sensitiveDotFolders: Set<String> = [
+            ".ssh", ".gnupg", ".aws", ".azure", ".config", ".kube", ".docker", ".android",
+            ".password-store", ".terraform.d", ".local", ".gradle", ".m2",
+            ".claude", ".codex", ".gemini", ".cursor", ".vscode", ".windsurf",
+        ]
+        // Pure download/build caches that tools rebuild on demand: safe to delete permanently.
+        let rebuildableDotFolders: Set<String> = [
+            ".cache", ".expo", ".chrome-play-console", ".npm", ".pnpm-store", ".pub-cache",
+            ".cocoapods", ".dartServer", ".node-gyp", ".electron", ".electron-gyp", ".yarn",
+        ]
         for name in listDirs(home) where name.hasPrefix(".") && name != "." && name != ".." && name != ".Trash" {
             let full = (home as NSString).appendingPathComponent(name)
             var isDir: ObjCBool = false
@@ -170,7 +185,10 @@ enum LibraryScanner {
             result.hiddenFolders.append(LibraryItem(
                 name: name, path: full, category: "hidden_folders", sizeBytes: size,
                 description: FolderDescriptions.describe(category: "hidden_folders", name: name),
-                canClean: [".cache", ".expo", ".chrome-play-console"].contains(name)
+                canClean: !sensitiveDotFolders.contains(name),
+                // Anything that isn't a known rebuildable cache (SDK managers, app state,
+                // unknown tools) goes to the Trash so a wrong click can be undone.
+                trashOnClean: !rebuildableDotFolders.contains(name)
             ))
         }
         result.hiddenFolders.sort { $0.sizeBytes > $1.sizeBytes }

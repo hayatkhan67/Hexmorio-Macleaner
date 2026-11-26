@@ -46,18 +46,16 @@ enum FolderTreeScanner {
 }
 
 enum LargeFilesScanner {
-    static let excludedDirs: Set<String> = ["node_modules", "Pods", ".git", "build", ".dart_tool"]
+    static let excludedDirs: Set<String> = ProjectLocations.skippedDirectoryNames.union([
+        "node_modules", "Pods", ".git", "build", ".build", ".dart_tool",
+        ".next", ".nuxt", ".gradle", "DerivedData", "target", ".venv", "venv"
+    ])
 
-    static func scan(minMB: Int, maxResults: Int = 50) -> [LargeFile] {
+    static func scan(minMB: Int, maxResults: Int = 100) -> [LargeFile] {
         let fm = FileManager.default
         let home = NSHomeDirectory()
-        let allDirs = ["\(home)/Downloads", "\(home)/Desktop", "\(home)/Documents"] + ProjectLocations.roots(fm: fm, home: home)
-        // Drop any dir already covered by a shorter dir earlier in the list
-        // (e.g. "~/Documents/projects" is nested under "~/Documents").
-        var searchDirs: [String] = []
-        for dir in allDirs where !searchDirs.contains(where: { dir == $0 || dir.hasPrefix($0 + "/") }) {
-            searchDirs.append(dir)
-        }
+        let hasFDA = Permissions.hasFullDiskAccess
+        let searchDirs = ProjectLocations.searchRoots(fm: fm, home: home)
         let minBytes = Int64(minMB) * 1024 * 1024
 
         var results: [LargeFile] = []
@@ -65,20 +63,38 @@ enum LargeFilesScanner {
             guard fm.fileExists(atPath: dir) else { continue }
             guard let enumerator = fm.enumerator(
                 at: URL(fileURLWithPath: dir),
-                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
-                options: [.skipsHiddenFiles]
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .totalFileAllocatedSizeKey, .fileSizeKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
             ) else { continue }
 
-            for case let url as URL in enumerator {
-                guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey]) else { continue }
-                if values.isDirectory == true {
-                    if excludedDirs.contains(url.lastPathComponent) {
-                        enumerator.skipDescendants()
+            while true {
+                var finished = false
+                autoreleasepool {
+                    guard let nextObj = enumerator.nextObject() else {
+                        finished = true
+                        return
                     }
-                    continue
+                    guard let url = nextObj as? URL else { return }
+                    let name = url.lastPathComponent
+                    guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .totalFileAllocatedSizeKey, .fileSizeKey]) else { return }
+
+                    if values.isSymbolicLink == true {
+                        if values.isDirectory == true { enumerator.skipDescendants() }
+                        return
+                    }
+                    if values.isDirectory == true {
+                        if excludedDirs.contains(name) || values.isPackage == true ||
+                           name.hasSuffix(".app") || name.hasSuffix(".photoslibrary") ||
+                           (!hasFDA && Permissions.isProtected(url.path)) {
+                            enumerator.skipDescendants()
+                        }
+                        return
+                    }
+                    let size = Int64(values.totalFileAllocatedSize ?? values.fileSize ?? 0)
+                    guard size >= minBytes else { return }
+                    results.append(LargeFile(name: name, path: url.path, sizeBytes: size))
                 }
-                guard let size = values.fileSize, Int64(size) >= minBytes else { continue }
-                results.append(LargeFile(name: url.lastPathComponent, path: url.path, sizeBytes: Int64(size)))
+                if finished { break }
             }
         }
         results.sort { $0.sizeBytes > $1.sizeBytes }

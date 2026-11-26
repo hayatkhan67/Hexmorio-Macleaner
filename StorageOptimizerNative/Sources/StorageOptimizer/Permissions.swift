@@ -36,6 +36,20 @@ enum Permissions {
         return protectedNames.contains { fnmatch($0, name, 0) == 0 }
     }
 
+    /// Apple's own TCC-protected subdirectories inside `~/Library/Caches`,
+    /// `~/Library/Logs`, and `~/Library/HTTPStorages`. Attempting to delete these
+    /// without Full Disk Access pops up repeated macOS "Hexmorio Macleaner would
+    /// like to access data from other apps" alerts during cleanup.
+    private static let appleProtectedPrefixes: [String] = [
+        "com.apple.", "CloudKit", "FamilyCircle", "PassKit", "GeoServices",
+        "GameKit", "HomeKit", "Safari", "Mail", "Messages"
+    ]
+
+    static func isProtectedOrAppleCache(name: String, fullPath: String) -> Bool {
+        if isProtected(fullPath) { return true }
+        return appleProtectedPrefixes.contains { name == $0 || name.hasPrefix($0) }
+    }
+
     /// `du -I` masks that keep a parent-folder measurement out of protected subfolders.
     static var duExcludeArgs: [String] {
         protectedNames.flatMap { ["-I", $0] }

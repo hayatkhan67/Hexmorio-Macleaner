@@ -9,7 +9,8 @@ struct ProjectsView: View {
                 Text("\(state.projects.count) build artifacts").foregroundStyle(.secondary)
                 Spacer()
                 Button("Clean All Builds") {
-                    state.confirm(title: "Clean all Flutter/Dart build directories?", message: "They will regenerate on next build.") {
+                    let totalBytes = state.projects.reduce(0) { $0 + $1.sizeBytes }
+                    state.confirm(title: "Clean all \(state.projects.count) project build & cache directories (\(formatBytes(totalBytes)))?", message: "They will regenerate on next build or package install.") {
                         Task { await state.cleanAllProjectBuilds() }
                     }
                 }.disabled(state.projects.isEmpty)
