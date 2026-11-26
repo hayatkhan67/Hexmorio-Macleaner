@@ -24,7 +24,7 @@ enum WhatsNew {
 
     /// Newest first.
     static let releases: [ReleaseNotes] = [
-        ReleaseNotes(version: "1.1.0", date: nil, items: [
+        ReleaseNotes(version: "1.1.0", date: "2026-11-27", items: [
             WhatsNewItem(
                 icon: "magnifyingglass",
                 title: "Finds projects anywhere",
